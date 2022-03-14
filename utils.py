@@ -15,6 +15,47 @@ import text
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+# !! Speaker 불러오기
+def get_speakers():
+    path = 'preprocessed/' + hp.dataset + '/TextGrid/'
+    file_list = os.listdir(path)
+    speaker_table = []
+
+    for file in file_list:
+        if file[:-15] not in speaker_table:
+            speaker_table.append(file[:-15])
+
+    n_speakers = len(speaker_table)
+
+    print('\n\n Speaker Count:', n_speakers)
+    print('Speaker list:', speaker_table, '\n\n')
+
+    return n_speakers, speaker_table
+
+
+# !! Embedding 레이어 추가
+def Embedding(num_embeddings, embedding_dim, padding_idx, std=0.01):
+    m = nn.Embedding(num_embeddings, embedding_dim, padding_idx=padding_idx)
+    m.weight.data.normal_(0, std)
+    return m
+
+# !! 스피커를 하나로 통합하는 모듈 구현 
+class SpeakerIntegrator(nn.Module):
+
+    def __init__(self):
+        super(SpeakerIntegrator, self).__init__()
+
+    def forward(self, x, spembs):
+        """
+        x      shape : (batch, 39, 256)
+        spembs shape : (batch, 256)
+        """
+        spembs = spembs.unsqueeze(1)
+        spembs = spembs.repeat(1, x.shape[1], 1)
+        x = x + spembs
+    
+        return x
+
 
 def get_alignment(tier):
     sil_phones = ['sil', 'sp', 'spn']

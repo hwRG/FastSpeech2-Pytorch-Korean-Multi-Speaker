@@ -32,8 +32,13 @@ def main(args):
     loader = DataLoader(dataset, batch_size=hp.batch_size**2, shuffle=True, 
         collate_fn=dataset.collate_fn, drop_last=True, num_workers=0)
 
+    # initial 단계에서 speaker 추가
     # Define model
-    model = nn.DataParallel(FastSpeech2()).to(device)
+    # !! 파라미터로 n_speakers 추가 
+
+    n_speakers, speaker_table = utils.get_speakers()
+
+    model = nn.DataParallel(FastSpeech2(n_speakers=n_speakers)).to(device)
     print("Model Has Been Defined")
     num_param = utils.get_param_num(model)
     print('Number of FastSpeech2 Parameters:', num_param)
