@@ -45,9 +45,10 @@ def kor_preprocess(text):
     sequence = np.stack([sequence])
     return torch.from_numpy(sequence).long().to(device)
 
-def get_FastSpeech2(num):
+# !! get FastSpeech에서도 n_speaker를 추가해 주어야 함
+def get_FastSpeech2(num, n_speakers):
     checkpoint_path = os.path.join(hp.checkpoint_path, "checkpoint_{}.pth.tar".format(num))
-    model = nn.DataParallel(FastSpeech2())
+    model = nn.DataParallel(FastSpeech2(n_speakers=n_speakers))
     model.load_state_dict(torch.load(checkpoint_path, map_location=device)['model'])
     model.requires_grad = False
     model.eval()
@@ -66,7 +67,7 @@ def synthesize(model, text, sentence, prefix=''):
 
     src_len = torch.from_numpy(np.array([text.shape[1]])).to(device)
         
-    mel, mel_postnet, log_duration_output, f0_output, energy_output, _, _, mel_len = model(text, src_len)
+    mel, mel_postnet, log_duration_output, f0_output, energy_output, _, _, mel_len = model(text, src_len, 10)
     
     mel_torch = mel.transpose(1, 2).detach()
     mel_postnet_torch = mel_postnet.transpose(1, 2).detach()
@@ -83,11 +84,6 @@ def synthesize(model, text, sentence, prefix=''):
 
     Audio.tools.inv_mel_spec(mel_postnet_torch[0], os.path.join(hp.test_path, '{}_griffin_lim_{}.wav'.format(prefix, sentence)))
     utils.hifigan_infer(mel_postnet_torch, path=os.path.join(hp.test_path, '{}_{}_{}.wav'.format(prefix, hp.vocoder, sentence)))   
-    #inference(mel_postnet_torch[0], path=os.path.join(hp.test_path, '{}_{}_{}.wav'.format(prefix, hp.vocoder, sentence)))   
-    #real_inference(mel_postnet_torch[0])
-    
-    #torch.save(os.path.join(hp.test_path, '{}_{}_{}.pt'.format(prefix, hp.vocoder, sentence)), mel_postnet_torch[0])
-
 
     utils.plot_data([(mel_postnet_torch[0].detach().cpu().numpy(), f0_output, energy_output)], ['Synthesized Spectrogram'], filename=os.path.join(hp.test_path, '{}_{}.png'.format(prefix, sentence)))
 
@@ -95,15 +91,14 @@ def synthesize(model, text, sentence, prefix=''):
 if __name__ == "__main__":
     # Test
     parser = argparse.ArgumentParser()
-    parser.add_argument('--step', type=int, default=116000)
+    parser.add_argument('--step', type=int, default=590000)
     args = parser.parse_args()
 
-    
-    model = get_FastSpeech2(args.step).to(device)
-    #if hp.vocoder == 'hifigan':
-    #    vocoder = utils.get_hifigan(ckpt_path=hp.vocoder_pretrained_model_path)
-    #else:
-    #    vocoder = None   
+    n_speakers, _ = utils.get_speakers()
+    n_speakers = torch.tensor(n_speakers).to(device)
+    #n_speakers = 33
+
+    model = get_FastSpeech2(args.step, n_speakers).to(device)
 
     #kss
     eval_sentence=['그는 괜찮은 척하려고 애쓰는 것 같았다','그녀의 사랑을 얻기 위해 애썼지만 헛수고였다','용돈을 아껴써라','그는 아내를 많이 아낀다','요즘 공부가 안돼요','한 여자가 내 옆에 앉았다']
@@ -131,9 +126,9 @@ if __name__ == "__main__":
     print('sentence that will be synthesized: ')
     print(sentence)
     if mode == '1' or mode== '2':
-        for s in sentence:
-            text = kor_preprocess(s)
-            synthesize(model, text, s, prefix='step_{}'.format(args.step))
+        for sent in sentence:
+            text = kor_preprocess(sent)
+            synthesize(model, text, sent, prefix='step_{}'.format(args.step))
     else:
         text = kor_preprocess(sentence)
         synthesize(model, text, sentence, prefix='step_{}'.format(args.step))

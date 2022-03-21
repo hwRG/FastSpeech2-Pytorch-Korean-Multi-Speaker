@@ -29,14 +29,21 @@ def main(args):
     
     # Get dataset
     dataset = Dataset("train.txt") 
+    # !! 여기서 shuffle이 True여서 인덱스를 랜덤으로 부르는 듯
     loader = DataLoader(dataset, batch_size=hp.batch_size**2, shuffle=True, 
         collate_fn=dataset.collate_fn, drop_last=True, num_workers=0)
 
     # initial 단계에서 speaker 추가
     # Define model
-    # !! 파라미터로 n_speakers 추가 
 
+    # !! 파라미터로 n_speakers 추가, speaker_table은 spker_id와 동일한 역할
+    # !! 둘다 tensor 형태로 바꿔주어야 함
+    # 영어가 들어가면 텐서로 바꿀 수 없음....
     n_speakers, speaker_table = utils.get_speakers()
+    n_speakers = torch.tensor(n_speakers).to(device)
+
+    # !! 글자들을 바꾸기가 어려운지 텐서 변경이 안됨
+    #speaker_table = torch.tensor(speaker_table)
 
     model = nn.DataParallel(FastSpeech2(n_speakers=n_speakers)).to(device)
     print("Model Has Been Defined")
@@ -100,14 +107,28 @@ def main(args):
         # Get Training Loader
         total_step = hp.epochs * len(loader) * hp.batch_size
 
+        # !! loader을 부를 때 getitems를 수행함
+        # batch size는 설정한 batch의 제곱임
         for i, batchs in enumerate(loader):
+            # btachs는 64개 중 8개를 뽑은 것
             for j, data_of_batch in enumerate(batchs):
+                # !!! 메타데이터가 나쁘게 작성된 데이터에 대한 배치단위로 넘기기로 해결 -> 해결 더 필요
+                if type(data_of_batch) == bool:
+                    continue
                 start_time = time.perf_counter()
-
                 current_step = i*hp.batch_size + j + args.restore_step + epoch*len(loader)*hp.batch_size + 1
                 
+                # 이번 배치의 이번 차례의 데이터들
+                # 여기에 spker_ids도 추가되어야 함 (07_M_LYW00_64 같은거)
                 # Get Data
+                #speaker_ids = torch.tensor(data_of_batch["id"]).long().to(device)
+                ids = []
+                for t in data_of_batch["id"]:
+                    ids.append(int(t))
+                speaker_ids = torch.tensor(ids).long().to(device)
+                #print(speaker_ids)
                 text = torch.from_numpy(data_of_batch["text"]).long().to(device)
+
                 mel_target = torch.from_numpy(data_of_batch["mel_target"]).float().to(device)
                 D = torch.from_numpy(data_of_batch["D"]).long().to(device)
                 log_D = torch.from_numpy(data_of_batch["log_D"]).float().to(device)
@@ -119,8 +140,9 @@ def main(args):
                 max_mel_len = np.max(data_of_batch["mel_len"]).astype(np.int32)
                 
                 # Forward
+                # !! speaker_ids를 추가해 주어야 함
                 mel_output, mel_postnet_output, log_duration_output, f0_output, energy_output, src_mask, mel_mask, _ = model(
-                    text, src_len, mel_len, D, f0, energy, max_src_len, max_mel_len)
+                    text, src_len, speaker_ids, mel_len, D, f0, energy, max_src_len, max_mel_len)
                 
                 # Cal Loss
                 mel_loss, mel_postnet_loss, d_loss, f_loss, e_loss = Loss(
@@ -195,6 +217,7 @@ def main(args):
                     print("save model at step {} ...".format(current_step))
                     
                     print(datetime.datetime.now() + datetime.timedelta(hours=9))
+
                 if current_step % hp.eval_step == 0:
                     model.eval()
                     with torch.no_grad():

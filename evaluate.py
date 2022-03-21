@@ -41,7 +41,8 @@ def evaluate(model, step, vocoder=None):
 
     # Get dataset
     dataset = Dataset("val.txt", sort=False)
-    loader = DataLoader(dataset, batch_size=hp.batch_size**2, shuffle=False, collate_fn=dataset.collate_fn, drop_last=False, num_workers=0, )
+    loader = DataLoader(dataset, batch_size=hp.batch_size**2, shuffle=False, 
+        collate_fn=dataset.collate_fn, drop_last=False, num_workers=0)
     
     # Get loss function
     Loss = FastSpeech2Loss().to(device)
@@ -71,8 +72,9 @@ def evaluate(model, step, vocoder=None):
         
             with torch.no_grad():
                 # Forward
+                # train과 마찬가지로 id를 추가해 주어야 함
                 mel_output, mel_postnet_output, log_duration_output, f0_output, energy_output, src_mask, mel_mask, out_mel_len = model(
-                        text, src_len, mel_len, D, f0, energy, max_src_len, max_mel_len)
+                        text, src_len, id_, mel_len, D, f0, energy, max_src_len, max_mel_len)
                 
                 # Cal Loss
                 mel_loss, mel_postnet_loss, d_loss, f_loss, e_loss = Loss(
@@ -105,9 +107,10 @@ def evaluate(model, step, vocoder=None):
                             utils.vocgan_infer(mel_target_torch, vocoder, path=os.path.join(hp.eval_path, 'eval_groundtruth_{}_{}.wav'.format(basename, hp.vocoder)))   
                             utils.vocgan_infer(mel_postnet_torch, vocoder, path=os.path.join(hp.eval_path, 'eval_step_{}_{}_{}.wav'.format(step, basename, hp.vocoder)))  
                         
+                        # hifigan
                         elif hp.vocoder == "hifigan":
-                            utils.hifigan_infer(mel_target_torch, vocoder, path=os.path.join(hp.eval_path, 'eval_groundtruth_{}_{}.wav'.format(basename, hp.vocoder)))   
-                            utils.hifigan_infer(mel_postnet_torch, vocoder, path=os.path.join(hp.eval_path, 'eval_step_{}_{}_{}.wav'.format(step, basename, hp.vocoder)))  
+                            utils.hifigan_infer(mel_target_torch, path=os.path.join(hp.eval_path, 'eval_groundtruth_{}_{}.wav'.format(basename, hp.vocoder)))   
+                            utils.hifigan_infer(mel_postnet_torch, path=os.path.join(hp.eval_path, 'eval_step_{}_{}_{}.wav'.format(step, basename, hp.vocoder)))  
                         
                         np.save(os.path.join(hp.eval_path, 'eval_step_{}_{}_mel.npy'.format(step, basename)), mel_postnet.numpy())
                         

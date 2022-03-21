@@ -56,11 +56,11 @@ class Encoder(nn.Module):
             d_model, d_inner, n_head, d_k, d_v, dropout=dropout) for _ in range(n_layers)])
 
     def forward(self, src_seq, mask, return_attns=False):
-
         enc_slf_attn_list = []
         batch_size, max_len = src_seq.shape[0], src_seq.shape[1]
         
         # -- Prepare masks
+        # src_seq과 mask된 것의 크기가 다른건지 확인하자 -> 같은 것임을 확인
         slf_attn_mask = mask.unsqueeze(1).expand(-1, max_len, -1)
 
         # -- Forward
@@ -73,7 +73,7 @@ class Encoder(nn.Module):
             enc_output, enc_slf_attn = enc_layer(
                 enc_output,
                 mask=mask,
-                slf_attn_mask=slf_attn_mask)
+                slf_attn_mask=slf_attn_mask) # !! mask 계산이 제대로 안된듯?
             if return_attns:
                 enc_slf_attn_list += [enc_slf_attn]
 

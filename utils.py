@@ -17,26 +17,19 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # !! Speaker 불러오기
 def get_speakers():
-    path = 'preprocessed/' + hp.dataset + '/TextGrid/'
+    path = 'preprocessed/' + hp.dataset + '/alignment'
     file_list = os.listdir(path)
-    speaker_table = []
+    n_speakers = len(file_list)
 
-    for file in file_list:
-        if file[:-15] not in speaker_table:
-            speaker_table.append(file[:-15])
+    print('\nSpeaker Count:', n_speakers)
 
-    n_speakers = len(speaker_table)
-
-    print('\n\n Speaker Count:', n_speakers)
-    print('Speaker list:', speaker_table, '\n\n')
-
-    return n_speakers, speaker_table
+    return n_speakers, file_list
 
 
 # !! Embedding 레이어 추가
 def Embedding(num_embeddings, embedding_dim, padding_idx, std=0.01):
     m = nn.Embedding(num_embeddings, embedding_dim, padding_idx=padding_idx)
-    m.weight.data.normal_(0, std)
+    #m.weight.data.normal_(0, std)
     return m
 
 # !! 스피커를 하나로 통합하는 모듈 구현 
@@ -227,26 +220,6 @@ def hifigan_infer(mel, path):
 
         wavfile.write(path, hp.sampling_rate, audio)
         print(path, 'done')
-"""
-def hifigan_infer(mel, vocoder, path):
-    model = vocoder
-
-    # get_hifigan에서 하는 eval과 weight 초기화를 수행
-    model.eval()
-    model.remove_weight_norm()
-
-    with torch.no_grad():
-        if len(mel.shape) == 2:
-            mel = mel.unsqueeze(0)
-
-        audio = model.infer(mel).squeeze()
-        audio = hp.max_wav_value * audio[:-(hp.hop_length*10)]
-        audio = audio.clamp(min=-hp.max_wav_value, max=hp.max_wav_value-1)
-        audio = audio.short().cpu().detach().numpy()
-
-        wavfile.write(path, hp.sampling_rate, audio)
-"""
-
 
 
 def pad_1D(inputs, PAD=0):

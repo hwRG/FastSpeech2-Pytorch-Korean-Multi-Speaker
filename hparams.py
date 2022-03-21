@@ -1,6 +1,6 @@
 import os
 ### old_man_city ###
-dataset = "old_man_city"
+dataset = "old_man_city_30m"
 data_path = os.path.join("./dataset/", dataset)
 meta_name = dataset + "_transcript.txt"
 textgrid_name = "textgrids.zip"
@@ -14,7 +14,8 @@ text_cleaners = ['korean_cleaners']
 
 # Audio and mel
 ### kss ###
-sampling_rate = 22050
+# !! aihub 기준 16000이라 수정
+sampling_rate = 16000
 filter_length = 1024
 hop_length = 256
 win_length = 1024
@@ -59,7 +60,7 @@ test_path = "./results"
 
 # Optimizer
 batch_size = 8
-epochs = 1000
+epochs = 10000
 n_warm_up_step = 4000
 grad_clip_thresh = 1.0
 acc_steps = 1
@@ -92,8 +93,8 @@ log_offset = 1.
 
 
 # Save, log and synthesis
-save_step = 1000
-eval_step = 1000
+save_step = 5000
+eval_step = 5000
 eval_size = 256
 log_step = 1000
 clear_Time = 20

@@ -10,6 +10,7 @@ import hparams as hp
 from jamo import h2j
 import codecs
 import random
+import tqdm
 
 from sklearn.preprocessing import StandardScaler
 
@@ -33,22 +34,25 @@ def build_from_path(in_dir, out_dir, meta):
     with open(os.path.join(in_dir, meta), encoding='utf-8') as f:
         for index, line in enumerate(f):
             parts = line.strip().split('|')
-            basename, text = parts[0], parts[3]
+            # !! basename은 100063/10006312229.wav 형식임
+            # basename[0] : 폴더명 / basename[1] : 파일명 
+            basename = parts[0].strip().split('/')
+            text = parts[3]
 
             # Alignment로 Preprocessing checkpoint
-            preCheck = out_dir + '/alignment/' + '{}-ali-{}.npy'.format(hp.dataset, basename[:-4])
-            #print(preCheck)
-
+            preCheck = out_dir + '/mel/' + basename[0] + '/{}-mel-{}.npy'.format(hp.dataset, basename[1][:-4])
             if os.path.isfile(preCheck):
                 continue
+
             ret = process_utterance(in_dir, out_dir, basename, scalers)
             
-            
+            # !! f0가 없거나 Textgrid가 없는 등 상황에서 포함시키지 않음
             if ret is None or ret is False:
                 continue
             else:
                 info, n = ret
             
+            # 1번2번3번4번으로 train/vaild 나누는 것 없앰
             #if basename[0] == '1':
             #    val.append(info)
             #else:
@@ -61,13 +65,13 @@ def build_from_path(in_dir, out_dir, meta):
                 train.append(info)
 
 
-            if index % 100 == 0:
+            if index % 1000 == 0:
                 print("Done %d" % index)
 
             n_frames += n
             
     param_list = [np.array([scaler.mean_, scaler.scale_]) for scaler in scalers]
-    print(param_list)
+    #print(param_list)
     param_name_list = ['mel_stat.npy', 'f0_stat.npy', 'energy_stat.npy']
     [np.save(os.path.join(out_dir, param_name), param_list[idx]) for idx, param_name in enumerate(param_name_list)]
 
@@ -75,25 +79,22 @@ def build_from_path(in_dir, out_dir, meta):
 
 
 def process_utterance(in_dir, out_dir, basename, scalers):
-    wav_bak_basename=basename.replace('.wav','')
+    basename[1]=basename[1].replace('.wav','')
 
-    basename = wav_bak_basename # old_man_city처럼 한 폴더에 다 있을 경우
-    # basename = wav_bak_basename[2:] KSS처럼 폴더가 있을 경우
-
-    wav_bak_path = os.path.join(in_dir, "wavs_bak", "{}.wav".format(wav_bak_basename))
-    wav_path = os.path.join(in_dir, 'wavs', '{}.wav'.format(basename))
+    wav_path = os.path.join(in_dir, 'wavs', basename[0], '{}.wav'.format(basename[1]))
 
     # Convert kss data into PCM encoded wavs
-    if not os.path.isfile(wav_path):
-        os.system("ffmpeg -i {} -ac 1 -ar 22050 {}".format(wav_bak_path, wav_path))    
+    # !! 높은 해상도에서 16000 으로 변경하는데 이미 16000이라 안해줘도 됨
+    #if not os.path.isfile(wav_path):
+    #    os.system("ffmpeg -i {} -ac 1 -ar 16000 {}".format(wav_bak_path, wav_path))    
 
     # Textgrid hparam에 의존하도록 변경
     #tg_path = os.path.join(out_dir, 'TextGrid', '{}.TextGrid'.format(basename)) 
-    tg_path = os.path.join(out_dir, hp.textgrid_name.replace('.zip', ''), '{}.TextGrid'.format(basename)) 
+    tg_path = os.path.join(out_dir, hp.textgrid_name.replace('.zip', ''), basename[0], '{}.TextGrid'.format(basename[1])) 
 
     # TextGrid가 없을 경우
     if os.path.isfile(tg_path) == False:
-        print(basename, 'TextGrid is Not Found.')
+        print(basename[1], 'TextGrid is Not Found.')
         return None
 
     # Get alignments
@@ -121,7 +122,9 @@ def process_utterance(in_dir, out_dir, basename, scalers):
     energy = energy.numpy().astype(np.float32)[:sum(duration)]
 
     # old_man에서 f0의 인덱스를 모두 선택해서 다 remov해버리는 문제가 발생함
-    #f0, energy = remove_outlier(f0), remove_outlier(energy)
+    # !! 일단 다시 해보는 거로
+    # outlier을 없애서 그런지 시간이 오래걸림 + 많은 것들이 f0을 잃어버림 이게 맞는 것 같기도?
+    f0, energy = remove_outlier(f0), remove_outlier(energy)
 
     f0, energy = average_by_duration(f0, duration), average_by_duration(energy, duration)
     
@@ -133,21 +136,34 @@ def process_utterance(in_dir, out_dir, basename, scalers):
     if mel_spectrogram.shape[1] >= hp.max_seq_len:
         return None
 
+    # !! 사용할 루트를 폴더명에 따라 저장함 
     # Save alignment
-    ali_filename = '{}-ali-{}.npy'.format(hp.dataset, basename)
-    np.save(os.path.join(out_dir, 'alignment', ali_filename), duration, allow_pickle=False)
+    
+    if not os.path.exists(os.path.join(out_dir, 'alignment', basename[0])):
+        os.makedirs(os.path.join(out_dir, 'alignment', basename[0]), exist_ok=True)
+    ali_filename = '{}-ali-{}.npy'.format(hp.dataset, basename[1])
+    np.save(os.path.join(out_dir, 'alignment', basename[0], ali_filename), duration, allow_pickle=False)
 
+    
+    if not os.path.exists(os.path.join(out_dir, 'f0', basename[0])):
+        os.makedirs(os.path.join(out_dir, 'f0', basename[0]), exist_ok=True)
     # Save fundamental prequency
-    f0_filename = '{}-f0-{}.npy'.format(hp.dataset, basename)
-    np.save(os.path.join(out_dir, 'f0', f0_filename), f0, allow_pickle=False)
+    f0_filename = '{}-f0-{}.npy'.format(hp.dataset, basename[1])
+    np.save(os.path.join(out_dir, 'f0', basename[0], f0_filename), f0, allow_pickle=False)
 
+
+    if not os.path.exists(os.path.join(out_dir, 'energy', basename[0])):
+        os.makedirs(os.path.join(out_dir, 'energy', basename[0]), exist_ok=True)
     # Save energy
-    energy_filename = '{}-energy-{}.npy'.format(hp.dataset, basename)
-    np.save(os.path.join(out_dir, 'energy', energy_filename), energy, allow_pickle=False)
+    energy_filename = '{}-energy-{}.npy'.format(hp.dataset, basename[1])
+    np.save(os.path.join(out_dir, 'energy', basename[0], energy_filename), energy, allow_pickle=False)
 
+
+    if not os.path.exists(os.path.join(out_dir, 'mel', basename[0])):
+        os.makedirs(os.path.join(out_dir, 'mel', basename[0]), exist_ok=True)
     # Save spectrogram
-    mel_filename = '{}-mel-{}.npy'.format(hp.dataset, basename)
-    np.save(os.path.join(out_dir, 'mel', mel_filename), mel_spectrogram.T, allow_pickle=False)
+    mel_filename = '{}-mel-{}.npy'.format(hp.dataset, basename[1])
+    np.save(os.path.join(out_dir, 'mel', basename[0], mel_filename), mel_spectrogram.T, allow_pickle=False)
    
     # 스케일러 (사용하는 건지 잘 모르겠음)
     mel_scaler, f0_scaler, energy_scaler = scalers
@@ -155,4 +171,5 @@ def process_utterance(in_dir, out_dir, basename, scalers):
     f0_scaler.partial_fit(f0[f0!=0].reshape(-1, 1))
     energy_scaler.partial_fit(energy[energy != 0].reshape(-1, 1))
 
-    return '|'.join([basename, text]), mel_spectrogram.shape[1]
+    # !! 여기 애매한 듯
+    return '|'.join([basename[1], text]), mel_spectrogram.shape[1]
