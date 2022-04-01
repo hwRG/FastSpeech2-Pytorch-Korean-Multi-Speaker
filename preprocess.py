@@ -1,5 +1,5 @@
 import os
-from data import old_man_city
+from data import data_processing
 import hparams as hp
 
 def write_metadata(train, val, out_dir):
@@ -37,16 +37,18 @@ def main():
 
     if not os.path.exists(os.path.join(out_dir, textgrid_name.replace(".zip", ""))):
         os.system('unzip {} -d {}'.format(os.path.join(out_dir, textgrid_name), out_dir))
-    """
-    # "이름"
-    if not os.path.exists(os.path.join(in_dir, "wavs_bak")):
-        os.makedirs(os.path.join(in_dir, "wavs"))
-        os.system("mv {} {}".format(os.path.join(in_dir, "../", meta), os.path.join(in_dir)))
+
+    # wavs_back을 labs 폴더로 변경하여 wavs는 labs로 두고 wav는 sampling 후 wavs에 저장
+    if not os.path.exists(os.path.join(in_dir, "labs")):
+        #os.makedirs(os.path.join(in_dir, "wavs"))
         for i in range(1, 5) : os.system("mv {} {}".format(os.path.join(in_dir, str(i)), os.path.join(in_dir, "wavs")))
-        os.system("mv {} {}".format(os.path.join(in_dir, "wavs"), os.path.join(in_dir, "wavs_bak")))
+        os.system("mv {} {}".format(os.path.join(in_dir, "wavs"), os.path.join(in_dir, "labs")))
+        
         os.makedirs(os.path.join(in_dir, "wavs"))
-    """
-    train, val = old_man_city.build_from_path(in_dir, out_dir, meta)
+        for i in os.listdir(in_dir + "/labs"):
+            os.makedirs(os.path.join(in_dir, "wavs", i))
+
+    train, val = data_processing.build_from_path(in_dir, out_dir, meta)
 
     write_metadata(train, val, out_dir)
     

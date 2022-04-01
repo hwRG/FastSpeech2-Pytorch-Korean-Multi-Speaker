@@ -71,7 +71,7 @@ class Dataset(Dataset):
             if len(text) != len(D):
                 #print('the dimension of text and duration should be the same')
                 #print('text: ',sequence_to_text(text)) # 왜인지 ascii 오류가 뜬다
-                print(text, text.shape, D, D.shape, name)
+                print(text.shape, D.shape, name)
                 #print(type(texts))
                 # !!! wav와 메타데이터의 단위가 달라요 문제에요 할 때 False를 return
                 # !!! 여기 걸리는 데이터는 아예 버리는 코드를 추가해야 함

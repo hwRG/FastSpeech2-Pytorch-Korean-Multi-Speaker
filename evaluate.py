@@ -27,7 +27,7 @@ def get_FastSpeech2(num):
     model.eval()
     return model
 
-def evaluate(model, step, vocoder=None):
+def evaluate(model, step, speaker_table, vocoder=None):
     model.eval()
     torch.manual_seed(0)
 
@@ -58,7 +58,12 @@ def evaluate(model, step, vocoder=None):
     for i, batchs in enumerate(loader):
         for j, data_of_batch in enumerate(batchs):
             # Get Data
-            id_ = data_of_batch["id"]
+
+            speaker_ids = []
+            for t in data_of_batch["id"]:
+                speaker_ids.append(int(t))
+            speaker_ids = data_of_batch["id"]
+
             text = torch.from_numpy(data_of_batch["text"]).long().to(device)
             mel_target = torch.from_numpy(data_of_batch["mel_target"]).float().to(device)
             D = torch.from_numpy(data_of_batch["D"]).int().to(device)
@@ -74,7 +79,7 @@ def evaluate(model, step, vocoder=None):
                 # Forward
                 # train과 마찬가지로 id를 추가해 주어야 함
                 mel_output, mel_postnet_output, log_duration_output, f0_output, energy_output, src_mask, mel_mask, out_mel_len = model(
-                        text, src_len, id_, mel_len, D, f0, energy, max_src_len, max_mel_len)
+                        text, src_len, speaker_ids, speaker_table, mel_len, D, f0, energy, max_src_len, max_mel_len)
                 
                 # Cal Loss
                 mel_loss, mel_postnet_loss, d_loss, f_loss, e_loss = Loss(
@@ -89,7 +94,7 @@ def evaluate(model, step, vocoder=None):
                 if idx == 0 and vocoder is not None:
                     # Run vocoding and plotting spectrogram only when the vocoder is defined
                     for k in range(1):
-                        basename = id_[k]
+                        basename = speaker_ids[k]
                         gt_length = mel_len[k]
                         out_length = out_mel_len[k]
                         

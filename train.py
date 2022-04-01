@@ -41,6 +41,7 @@ def main(args):
     # 영어가 들어가면 텐서로 바꿀 수 없음....
     n_speakers, speaker_table = utils.get_speakers()
     n_speakers = torch.tensor(n_speakers).to(device)
+    print('\nSpeaker Count', n_speakers)
 
     # !! 글자들을 바꾸기가 어려운지 텐서 변경이 안됨
     #speaker_table = torch.tensor(speaker_table)
@@ -118,15 +119,13 @@ def main(args):
                 start_time = time.perf_counter()
                 current_step = i*hp.batch_size + j + args.restore_step + epoch*len(loader)*hp.batch_size + 1
                 
-                # 이번 배치의 이번 차례의 데이터들
-                # 여기에 spker_ids도 추가되어야 함 (07_M_LYW00_64 같은거)
-                # Get Data
-                #speaker_ids = torch.tensor(data_of_batch["id"]).long().to(device)
-                ids = []
+                # 이번 배치의 데이터 텐서로 변환 (speaker_ids 제외)
+
+                speaker_ids = []
                 for t in data_of_batch["id"]:
-                    ids.append(int(t))
-                speaker_ids = torch.tensor(ids).long().to(device)
-                #print(speaker_ids)
+                    speaker_ids.append(t)
+                
+                # speaker embedding을 위해 dict형식으로 0~x까지 value를 설정하자
                 text = torch.from_numpy(data_of_batch["text"]).long().to(device)
 
                 mel_target = torch.from_numpy(data_of_batch["mel_target"]).float().to(device)
@@ -140,9 +139,9 @@ def main(args):
                 max_mel_len = np.max(data_of_batch["mel_len"]).astype(np.int32)
                 
                 # Forward
-                # !! speaker_ids를 추가해 주어야 함
+                # !!!! speaker_ids를 추가해 주어야 함 / 잠시 제거 / 다시 추가
                 mel_output, mel_postnet_output, log_duration_output, f0_output, energy_output, src_mask, mel_mask, _ = model(
-                    text, src_len, speaker_ids, mel_len, D, f0, energy, max_src_len, max_mel_len)
+                    text, src_len, speaker_ids, speaker_table, mel_len, D, f0, energy, max_src_len, max_mel_len)
                 
                 # Cal Loss
                 mel_loss, mel_postnet_loss, d_loss, f_loss, e_loss = Loss(
@@ -221,7 +220,7 @@ def main(args):
                 if current_step % hp.eval_step == 0:
                     model.eval()
                     with torch.no_grad():
-                        d_l, f_l, e_l, m_l, m_p_l = evaluate(model, current_step, vocoder)
+                        d_l, f_l, e_l, m_l, m_p_l = evaluate(model, current_step, speaker_table, vocoder)
                         t_l = d_l + f_l + e_l + m_l + m_p_l
                         
                         print(datetime.datetime.now() + datetime.timedelta(hours=9))

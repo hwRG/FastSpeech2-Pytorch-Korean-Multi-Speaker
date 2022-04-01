@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from transformer.Models import Encoder, Decoder
 from transformer.Layers import PostNet
 from modules import VarianceAdaptor
-from utils import get_mask_from_lengths, Embedding, SpeakerIntegrator
+from utils import get_mask_from_lengths, Embedding, SpeakerIntegrator, get_speakers
 import hparams as hp
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -18,11 +18,19 @@ class FastSpeech2(nn.Module):
         super(FastSpeech2, self).__init__()
 
         # !! speaker embedding 추가
-        self.n_speakers = n_speakers
+        self.n_speakers, self.speaker_table = get_speakers()
         self.speaker_embed_dim = speaker_embed_dim
         self.speaker_embed_std = speaker_embed_std
 
-        self.speaker_embeds = Embedding(n_speakers, speaker_embed_dim, padding_idx=None, std=speaker_embed_std)
+        # 싱글일 경우 임베딩 없이 학습 / 멀티일 경우 임베딩 적용 학습
+        if len(self.speaker_table) == 1:
+            self.single = True
+        else:
+            self.single = False
+
+
+        # !!!! padding idx를 None에서 0으로 바꿈
+        self.speaker_embeds = Embedding(n_speakers, speaker_embed_dim, padding_idx=0, std=speaker_embed_std)
 
         self.encoder = Encoder()
 
@@ -38,33 +46,37 @@ class FastSpeech2(nn.Module):
         if self.use_postnet:
             self.postnet = PostNet()
 
-    # !! speaker_ids 추가
-    def forward(self, src_seq, src_len, speaker_ids, mel_len=None, d_target=None, p_target=None, e_target=None, max_src_len=None, max_mel_len=None):
+    # !!!! speaker_ids 추가 / 잠시 제거
+    def forward(self, src_seq, src_len, speaker_ids, speaker_table, mel_len=None, d_target=None, p_target=None, e_target=None, max_src_len=None, max_mel_len=None, synthesize=False):
         src_mask = get_mask_from_lengths(src_len, max_src_len)
-
-
-        """
-        # !! 나뉘어진 mel_len 텐서를 다시 한 묶음으로 만들어냄
-        # 파라미터를 넣지 않아서 발생한 문제였음
-        mels_list = []
-        for mels in mel_len:
-            mel_tensor = 0
-            for mel in mels:
-                mel_tensor += int(mel)
-            mels_list.append(mel_tensor)
-        mels_list = torch.tensor(mels_list).to(device)
-        """
         mel_mask = get_mask_from_lengths(mel_len, max_mel_len) if mel_len is not None else None
-        
-        # !! 스피커 임베딩 레이어 추가
-        # !!! speakers_ids가 n_spkers와 비슷해야 하는건가?
-        #speaker_embed = self.speaker_embeds(speaker_ids)
+        speaker_ids_dict = []
 
-        # 해당 에러는 input size가 다를 때 나오는 에러임
-        encoder_output = self.encoder(src_seq, src_mask)
-        
-        # !! encoder output에 하나로 뭉친 output 추가
-        #encoder_output = self.speaker_integrator(encoder_output, speaker_embed)
+        if self.single == True: #or synthesize == True: # 합성을 위해 한개만 시도
+            #speaker_ids_dict.append(list(speaker_table.values())[-1]) # !!! 54개일 때도 마지막꺼, 1개일 때도 55번째꺼
+            #speaker_ids_dict = torch.tensor(speaker_ids_dict).long().to(device)
+
+            # 아예 임베딩 없이 encoder
+            encoder_output = self.encoder(src_seq, src_mask)
+        # !!!! 임베딩에 숫자 매핑을 위한 새로운 공간
+        elif synthesize == True:
+            speaker_ids_dict.append(list(speaker_table.values())[-1]) # !!! 54개일 때도 마지막꺼, 1개일 때도 55번째꺼
+            speaker_ids_dict = torch.tensor(speaker_ids_dict).long().to(device)
+            speaker_embed = self.speaker_embeds(speaker_ids_dict)
+            encoder_output = self.encoder(src_seq, src_mask)
+            # !! encoder output에 하나로 뭉친 output 추가
+            encoder_output = self.speaker_integrator(encoder_output, speaker_embed)
+
+        else:
+            for id in speaker_ids:
+                speaker_ids_dict.append(speaker_table[id])
+            # 지정된 임베딩 값을 텐서로 변환하여 배치에 맞게 돌아가게 함 
+            speaker_ids_dict = torch.tensor(speaker_ids_dict).long().to(device)
+            # !! 스피커 임베딩 레이어 추가
+            speaker_embed = self.speaker_embeds(speaker_ids_dict)
+            encoder_output = self.encoder(src_seq, src_mask)
+            # !! encoder output에 하나로 뭉친 output 추가
+            encoder_output = self.speaker_integrator(encoder_output, speaker_embed)
 
         if d_target is not None:
             variance_adaptor_output, d_prediction, p_prediction, e_prediction, _, _ = self.variance_adaptor(

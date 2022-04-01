@@ -12,22 +12,58 @@ from vocoder.hifigan_generator import Generator
 import hparams as hp
 import os
 import text
+import json
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # !! Speaker 불러오기
+# 이 과정에서 저장해야 할 듯
 def get_speakers():
     path = 'preprocessed/' + hp.dataset + '/alignment'
     file_list = os.listdir(path)
+    file_list.sort()
     n_speakers = len(file_list)
+    speaker_table = {}
+    
+    # Multi-speaker training 하는 경우 테이블 내용 저장
+    if n_speakers > 1:
+        speakers = {}
+        speakers['n_speakers'] = n_speakers
+        cnt = 0
+        for file in file_list:
+            speaker_table[file] = cnt
+            cnt+=1
+        
+        pre_speakers = {}
+        pre_speakers['n_speakers'] = n_speakers
+        pre_speakers['speaker_table'] = speaker_table
+        with open('speaker_info.json', 'w') as f:
+            json.dump(pre_speakers, f)
 
-    print('\nSpeaker Count:', n_speakers)
+    # single-speaker 즉, fine-tuning의 경우   
+    # 참고할 table이 있는지 exist, 있으면 가져오고 없으면 그냥 table은 한개로 설정     
+    else:
+        if os.path.exists('speaker_info.json'):
+            with open('speaker_info.json', 'r') as f:
+                pre_speakers = json.load(f)
+            #speaker_table = pre_speakers['speaker_table']
+            n_speakers = pre_speakers['n_speakers']
+            speaker_table[file_list[0]] = n_speakers
+            #n_speakers += 1
 
-    return n_speakers, file_list
+        else: # 싱글 스피커 학습일 때
+            speaker_table = {}
+            speaker_table[file_list[0]] = 0
+
+    #print('\nSpeaker Count', n_speakers)
+    #print('Speaker Table Dictionary\n', speaker_table)
+
+    return n_speakers, speaker_table
 
 
 # !! Embedding 레이어 추가
 def Embedding(num_embeddings, embedding_dim, padding_idx, std=0.01):
+    # !!!! 54개까지 스피커를 두었는데, 실제로 넣는건 이름으로 '100064' 넣어서 문제 생기는 듯
     m = nn.Embedding(num_embeddings, embedding_dim, padding_idx=padding_idx)
     #m.weight.data.normal_(0, std)
     return m

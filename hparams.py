@@ -1,6 +1,10 @@
 import os
-### old_man_city ###
-dataset = "old_man_city_30m"
+
+# 데이터셋 이름 정하는 것으로 dataset 안에 폴더 하나만 있어야 함
+dataset = os.listdir('dataset')[0]
+# 만약 dataset이 비었을 때 preprocessed를 활용
+# 없으면 에러 발생 ㄱ
+
 data_path = os.path.join("./dataset/", dataset)
 meta_name = dataset + "_transcript.txt"
 textgrid_name = "textgrids.zip"
@@ -59,7 +63,7 @@ test_path = "./results"
 
 
 # Optimizer
-batch_size = 8
+batch_size = 16
 epochs = 10000
 n_warm_up_step = 4000
 grad_clip_thresh = 1.0
@@ -72,7 +76,7 @@ weight_decay = 0.
 
 # Vocoder
 vocoder = 'hifigan'
-vocoder_pretrained_model_name = "g_00790000.pt"
+vocoder_pretrained_model_name = dataset + "_g_00215000.pt"
 vocoder_pretrained_model_path = os.path.join("./vocoder/pretrained_models/", vocoder_pretrained_model_name)
 
 
@@ -93,7 +97,7 @@ log_offset = 1.
 
 
 # Save, log and synthesis
-save_step = 5000
+save_step = 10000
 eval_step = 5000
 eval_size = 256
 log_step = 1000

@@ -4,6 +4,8 @@ import numpy as np
 import hparams as hp
 import os
 
+from utils import get_speakers
+
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"]=hp.synth_visible_devices
@@ -29,7 +31,8 @@ def kor_preprocess(text):
     text = text.rstrip(punctuation)
     
     g2p=G2p()
-    phone = g2p(text)
+    #phone = text # !!! G2P 적용 X 
+    phone = g2p(text) # !!! G2P 적용 O
     print('after g2p: ',phone)
     phone = h2j(phone)
     print('after h2j: ',phone)
@@ -55,7 +58,7 @@ def get_FastSpeech2(num, n_speakers):
     return model
 
 def synthesize(model, text, sentence, prefix=''):
-    sentence = sentence[:10] # long filename will result in OS Error
+    sentence = sentence[:20] # long filename will result in OS Error
 
     mean_mel, std_mel = torch.tensor(np.load(os.path.join(hp.preprocessed_path, "mel_stat.npy")), dtype=torch.float).to(device)
     mean_f0, std_f0 = torch.tensor(np.load(os.path.join(hp.preprocessed_path, "f0_stat.npy")), dtype=torch.float).to(device)
@@ -67,7 +70,14 @@ def synthesize(model, text, sentence, prefix=''):
 
     src_len = torch.from_numpy(np.array([text.shape[1]])).to(device)
         
-    mel, mel_postnet, log_duration_output, f0_output, energy_output, _, _, mel_len = model(text, src_len, 10)
+    # !!!! 여기도 speaker id 제거
+    # !!!! id는 새로운 사람에 대한 것으로, 이론상 54개로 pretrain 했으면 54번째를 넘겨야 함
+    
+    n_speakers, speaker_table = utils.get_speakers()
+
+    # Multi-speaker 테스트면 그냥 제일 첫 번째 사람을 지목,
+    # single-speaker의 경우에는 제일 앞 본인을 선택할 수 있도록 ids[0]
+    mel, mel_postnet, log_duration_output, f0_output, energy_output, _, _, mel_len = model(text, src_len, n_speakers, speaker_table, synthesize=True)
     
     mel_torch = mel.transpose(1, 2).detach()
     mel_postnet_torch = mel_postnet.transpose(1, 2).detach()
@@ -82,8 +92,9 @@ def synthesize(model, text, sentence, prefix=''):
     if not os.path.exists(hp.test_path):
         os.makedirs(hp.test_path)
 
-    Audio.tools.inv_mel_spec(mel_postnet_torch[0], os.path.join(hp.test_path, '{}_griffin_lim_{}.wav'.format(prefix, sentence)))
-    utils.hifigan_infer(mel_postnet_torch, path=os.path.join(hp.test_path, '{}_{}_{}.wav'.format(prefix, hp.vocoder, sentence)))   
+    # Griffin lim은 잠시 들어가라
+    #Audio.tools.inv_mel_spec(mel_postnet_torch[0], os.path.join(hp.test_path, '{}_griffin_lim_{}.wav'.format(prefix, sentence)))
+    utils.hifigan_infer(mel_postnet_torch, path=os.path.join(hp.test_path, '{}_{}.wav'.format(prefix, sentence)))   
 
     utils.plot_data([(mel_postnet_torch[0].detach().cpu().numpy(), f0_output, energy_output)], ['Synthesized Spectrogram'], filename=os.path.join(hp.test_path, '{}_{}.png'.format(prefix, sentence)))
 
@@ -91,19 +102,18 @@ def synthesize(model, text, sentence, prefix=''):
 if __name__ == "__main__":
     # Test
     parser = argparse.ArgumentParser()
-    parser.add_argument('--step', type=int, default=590000)
+    parser.add_argument('--step', type=str, default=80000)
     args = parser.parse_args()
 
     n_speakers, _ = utils.get_speakers()
     n_speakers = torch.tensor(n_speakers).to(device)
-    #n_speakers = 33
 
     model = get_FastSpeech2(args.step, n_speakers).to(device)
 
     #kss
     eval_sentence=['그는 괜찮은 척하려고 애쓰는 것 같았다','그녀의 사랑을 얻기 위해 애썼지만 헛수고였다','용돈을 아껴써라','그는 아내를 많이 아낀다','요즘 공부가 안돼요','한 여자가 내 옆에 앉았다']
     train_sentence=['가까운 시일 내에 한번, 댁으로 찾아가겠습니다','우리의 승리는 기적에 가까웠다','아이들의 얼굴에는 행복한 미소가 가득했다','헬륨은 공기보다 가볍다','이것은 간단한 문제가 아니다']
-    test_sentence='반갑습니다 저는 패스트 스피치를 트레이닝하고 있습니다'
+    test_sentence='안녕하세요 반갑습니다 테스트랍니다'
     
     g2p=G2p()
     print('which sentence do you want?')
@@ -127,8 +137,10 @@ if __name__ == "__main__":
     print(sentence)
     if mode == '1' or mode== '2':
         for sent in sentence:
+            #sent += ' 요어'
             text = kor_preprocess(sent)
             synthesize(model, text, sent, prefix='step_{}'.format(args.step))
     else:
+        #sentence += ' 요어'
         text = kor_preprocess(sentence)
         synthesize(model, text, sentence, prefix='step_{}'.format(args.step))
