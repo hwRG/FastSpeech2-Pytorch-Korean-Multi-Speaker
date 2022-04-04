@@ -14,7 +14,7 @@ class FastSpeech2(nn.Module):
     """ FastSpeech2 """
 
     # !! embedding을 위한 파라미터 추가
-    def __init__(self, n_speakers=1, speaker_embed_dim=256, speaker_embed_std=0.01, use_postnet=True):
+    def __init__(self, speaker_embed_dim=256, speaker_embed_std=0.01, use_postnet=True):
         super(FastSpeech2, self).__init__()
 
         # !! speaker embedding 추가
@@ -27,10 +27,8 @@ class FastSpeech2(nn.Module):
             self.single = True
         else:
             self.single = False
-
-
-        # !!!! padding idx를 None에서 0으로 바꿈
-        self.speaker_embeds = Embedding(n_speakers, speaker_embed_dim, padding_idx=0, std=speaker_embed_std)
+            
+        self.speaker_embeds = Embedding(self.n_speakers, speaker_embed_dim, padding_idx=0, std=speaker_embed_std)
 
         self.encoder = Encoder()
 
@@ -46,30 +44,22 @@ class FastSpeech2(nn.Module):
         if self.use_postnet:
             self.postnet = PostNet()
 
-    # !!!! speaker_ids 추가 / 잠시 제거
-    def forward(self, src_seq, src_len, speaker_ids, speaker_table, mel_len=None, d_target=None, p_target=None, e_target=None, max_src_len=None, max_mel_len=None, synthesize=False):
+
+    def forward(self, src_seq, src_len, speaker_ids=None, mel_len=None, d_target=None, p_target=None, e_target=None, max_src_len=None, max_mel_len=None, synthesize=False):
         src_mask = get_mask_from_lengths(src_len, max_src_len)
         mel_mask = get_mask_from_lengths(mel_len, max_mel_len) if mel_len is not None else None
-        speaker_ids_dict = []
 
-        if self.single == True: #or synthesize == True: # 합성을 위해 한개만 시도
-            #speaker_ids_dict.append(list(speaker_table.values())[-1]) # !!! 54개일 때도 마지막꺼, 1개일 때도 55번째꺼
-            #speaker_ids_dict = torch.tensor(speaker_ids_dict).long().to(device)
-
-            # 아예 임베딩 없이 encoder
+        if self.single == True: # Single Speaker (Fine-tune)
+            # 임베딩 없이 학습 / single synthesize도 임베딩 없이 합성
             encoder_output = self.encoder(src_seq, src_mask)
-        # !!!! 임베딩에 숫자 매핑을 위한 새로운 공간
-        elif synthesize == True:
-            speaker_ids_dict.append(list(speaker_table.values())[-1]) # !!! 54개일 때도 마지막꺼, 1개일 때도 55번째꺼
-            speaker_ids_dict = torch.tensor(speaker_ids_dict).long().to(device)
-            speaker_embed = self.speaker_embeds(speaker_ids_dict)
-            encoder_output = self.encoder(src_seq, src_mask)
-            # !! encoder output에 하나로 뭉친 output 추가
-            encoder_output = self.speaker_integrator(encoder_output, speaker_embed)
 
-        else:
-            for id in speaker_ids:
-                speaker_ids_dict.append(speaker_table[id])
+        else: # Multi Spekaer (Pre-train)
+            speaker_ids_dict = []
+            if synthesize == True: # Multi 합성은 현재 합성 결과를 확인하기 위함
+                speaker_ids_dict.append(list(self.speaker_table.values())[-1]) 
+            else:
+                for id in speaker_ids:
+                    speaker_ids_dict.append(self.speaker_table[id])
             # 지정된 임베딩 값을 텐서로 변환하여 배치에 맞게 돌아가게 함 
             speaker_ids_dict = torch.tensor(speaker_ids_dict).long().to(device)
             # !! 스피커 임베딩 레이어 추가

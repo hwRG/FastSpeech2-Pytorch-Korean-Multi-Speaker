@@ -1,7 +1,10 @@
 import os
 
 # 데이터셋 이름 정하는 것으로 dataset 안에 폴더 하나만 있어야 함
-dataset = os.listdir('dataset')[0]
+if os.path.exists(os.listdir('dataset')[0]):
+    dataset = os.listdir('dataset')[0]
+else:
+    dataset = os.listdir('preprocessed')[0]
 # 만약 dataset이 비었을 때 preprocessed를 활용
 # 없으면 에러 발생 ㄱ
 

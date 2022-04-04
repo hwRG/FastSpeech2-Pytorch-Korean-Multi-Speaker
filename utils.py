@@ -17,7 +17,6 @@ import json
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # !! Speaker 불러오기
-# 이 과정에서 저장해야 할 듯
 def get_speakers():
     path = 'preprocessed/' + hp.dataset + '/alignment'
     file_list = os.listdir(path)
@@ -46,17 +45,13 @@ def get_speakers():
         if os.path.exists('speaker_info.json'):
             with open('speaker_info.json', 'r') as f:
                 pre_speakers = json.load(f)
-            #speaker_table = pre_speakers['speaker_table']
+            # n_speakers 개수만 불러옴 
             n_speakers = pre_speakers['n_speakers']
             speaker_table[file_list[0]] = n_speakers
-            #n_speakers += 1
 
         else: # 싱글 스피커 학습일 때
             speaker_table = {}
             speaker_table[file_list[0]] = 0
-
-    #print('\nSpeaker Count', n_speakers)
-    #print('Speaker Table Dictionary\n', speaker_table)
 
     return n_speakers, speaker_table
 
@@ -199,13 +194,10 @@ def load_checkpoint(filepath, device):
     return checkpoint_dict
 
 def get_hifigan(ckpt_path): 
-    #checkpoint = torch.load(ckpt_path, map_location=device)
     state_dict_g = load_checkpoint(ckpt_path, device)
     model = Generator().to(device)
 
     model.load_state_dict(state_dict_g['generator'], strict=False)
-    
-    #model.eval()
 
     return model
 
@@ -224,7 +216,6 @@ def vocgan_infer(mel, vocoder, path):
 
         wavfile.write(path, hp.sampling_rate, audio)
 
-# 아예 hifigan inference를 가져옴
 def hifigan_infer(mel, path):
 
     if torch.cuda.is_available():
@@ -237,21 +228,13 @@ def hifigan_infer(mel, path):
     state_dict_g = load_checkpoint(hp.vocoder_pretrained_model_path, device)
     generator.load_state_dict(state_dict_g['generator'], strict=False)
 
-    #filelist = os.listdir(.input_wavs_dir)
-
-    #os.makedirs(a.output_dir, exist_ok=True)
-
     generator.eval()
     generator.remove_weight_norm()
     with torch.no_grad():
-        #wav, sr = load_wav(os.path.join(a.input_wavs_dir, filname))
-        #wav = wav / MAX_WAV_VALUE
-        #wav = torch.FloatTensor(mel).to(device)
-        #x = get_mel(wav.unsqueeze(0))
         x = mel
         y_g_hat = generator(x)
         audio = y_g_hat.squeeze()
-        audio = audio * 32768.0 #(MAX_WAV_VALUE
+        audio = audio * 32768.0 # MAX_WAV_VALUE
         audio = audio.cpu().numpy().astype('int16')
 
         wavfile.write(path, hp.sampling_rate, audio)

@@ -20,6 +20,7 @@ from optimizer import ScheduledOptim
 from evaluate import evaluate
 import utils
 import audio as Audio
+import re
 
 def main(args):
     torch.manual_seed(0)
@@ -36,24 +37,22 @@ def main(args):
     # initial 단계에서 speaker 추가
     # Define model
 
-    # !! 파라미터로 n_speakers 추가, speaker_table은 spker_id와 동일한 역할
     # !! 둘다 tensor 형태로 바꿔주어야 함
     # 영어가 들어가면 텐서로 바꿀 수 없음....
-    n_speakers, speaker_table = utils.get_speakers()
-    n_speakers = torch.tensor(n_speakers).to(device)
-    print('\nSpeaker Count', n_speakers)
+    _, speaker_table = utils.get_speakers()
+    print('\nSpeaker Count', len(speaker_table))
 
     # !! 글자들을 바꾸기가 어려운지 텐서 변경이 안됨
     #speaker_table = torch.tensor(speaker_table)
 
-    model = nn.DataParallel(FastSpeech2(n_speakers=n_speakers)).to(device)
+    model = nn.DataParallel(FastSpeech2()).to(device)
     print("Model Has Been Defined")
     num_param = utils.get_param_num(model)
     print('Number of FastSpeech2 Parameters:', num_param)
 
     # Optimizer and loss
     optimizer = torch.optim.Adam(model.parameters(), betas=hp.betas, eps=hp.eps, weight_decay = hp.weight_decay)
-    scheduled_optim = ScheduledOptim(optimizer, hp.decoder_hidden, hp.n_warm_up_step, args.restore_step)
+    scheduled_optim = ScheduledOptim(optimizer, hp.decoder_hidden, hp.n_warm_up_step, int(re.sub(r'[^0-9]', '', args.restore_step)))
     Loss = FastSpeech2Loss().to(device) 
     print("Optimizer and Loss Function Defined.")
 
@@ -117,8 +116,8 @@ def main(args):
                 if type(data_of_batch) == bool:
                     continue
                 start_time = time.perf_counter()
-                current_step = i*hp.batch_size + j + args.restore_step + epoch*len(loader)*hp.batch_size + 1
-                
+                current_step = i*hp.batch_size + j + int(re.sub(r'[^0-9]', '', args.restore_step)) + epoch*len(loader)*hp.batch_size + 1
+
                 # 이번 배치의 데이터 텐서로 변환 (speaker_ids 제외)
 
                 speaker_ids = []
@@ -141,7 +140,7 @@ def main(args):
                 # Forward
                 # !!!! speaker_ids를 추가해 주어야 함 / 잠시 제거 / 다시 추가
                 mel_output, mel_postnet_output, log_duration_output, f0_output, energy_output, src_mask, mel_mask, _ = model(
-                    text, src_len, speaker_ids, speaker_table, mel_len, D, f0, energy, max_src_len, max_mel_len)
+                    text, src_len, speaker_ids, mel_len, D, f0, energy, max_src_len, max_mel_len)
                 
                 # Cal Loss
                 mel_loss, mel_postnet_loss, d_loss, f_loss, e_loss = Loss(
@@ -244,7 +243,7 @@ def main(args):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--restore_step', type=int, default=0)
+    parser.add_argument('--restore_step', type=str, default='0')
     args = parser.parse_args()
 
     main(args)

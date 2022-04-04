@@ -49,9 +49,10 @@ def kor_preprocess(text):
     return torch.from_numpy(sequence).long().to(device)
 
 # !! get FastSpeech에서도 n_speaker를 추가해 주어야 함
-def get_FastSpeech2(num, n_speakers):
+# !!!!! n_speakers 필요 없는데 이미 ckpt에서 사용했어서 필요함..
+def get_FastSpeech2(num):
     checkpoint_path = os.path.join(hp.checkpoint_path, "checkpoint_{}.pth.tar".format(num))
-    model = nn.DataParallel(FastSpeech2(n_speakers=n_speakers))
+    model = nn.DataParallel(FastSpeech2())
     model.load_state_dict(torch.load(checkpoint_path, map_location=device)['model'])
     model.requires_grad = False
     model.eval()
@@ -69,15 +70,10 @@ def synthesize(model, text, sentence, prefix=''):
     mean_energy, std_energy = mean_energy.reshape(1, -1), std_energy.reshape(1, -1)
 
     src_len = torch.from_numpy(np.array([text.shape[1]])).to(device)
-        
-    # !!!! 여기도 speaker id 제거
-    # !!!! id는 새로운 사람에 대한 것으로, 이론상 54개로 pretrain 했으면 54번째를 넘겨야 함
-    
-    n_speakers, speaker_table = utils.get_speakers()
 
     # Multi-speaker 테스트면 그냥 제일 첫 번째 사람을 지목,
     # single-speaker의 경우에는 제일 앞 본인을 선택할 수 있도록 ids[0]
-    mel, mel_postnet, log_duration_output, f0_output, energy_output, _, _, mel_len = model(text, src_len, n_speakers, speaker_table, synthesize=True)
+    mel, mel_postnet, log_duration_output, f0_output, energy_output, _, _, mel_len = model(text, src_len, synthesize=True)
     
     mel_torch = mel.transpose(1, 2).detach()
     mel_postnet_torch = mel_postnet.transpose(1, 2).detach()
@@ -105,10 +101,11 @@ if __name__ == "__main__":
     parser.add_argument('--step', type=str, default=80000)
     args = parser.parse_args()
 
+    # !!!!! 이부분 코드 너무 잘못 짬 추후 수정 필요
     n_speakers, _ = utils.get_speakers()
     n_speakers = torch.tensor(n_speakers).to(device)
 
-    model = get_FastSpeech2(args.step, n_speakers).to(device)
+    model = get_FastSpeech2(args.step).to(device)
 
     #kss
     eval_sentence=['그는 괜찮은 척하려고 애쓰는 것 같았다','그녀의 사랑을 얻기 위해 애썼지만 헛수고였다','용돈을 아껴써라','그는 아내를 많이 아낀다','요즘 공부가 안돼요','한 여자가 내 옆에 앉았다']
@@ -137,10 +134,8 @@ if __name__ == "__main__":
     print(sentence)
     if mode == '1' or mode== '2':
         for sent in sentence:
-            #sent += ' 요어'
             text = kor_preprocess(sent)
             synthesize(model, text, sent, prefix='step_{}'.format(args.step))
     else:
-        #sentence += ' 요어'
         text = kor_preprocess(sentence)
         synthesize(model, text, sentence, prefix='step_{}'.format(args.step))

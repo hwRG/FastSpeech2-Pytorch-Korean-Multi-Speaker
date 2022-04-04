@@ -79,7 +79,7 @@ def evaluate(model, step, speaker_table, vocoder=None):
                 # Forward
                 # train과 마찬가지로 id를 추가해 주어야 함
                 mel_output, mel_postnet_output, log_duration_output, f0_output, energy_output, src_mask, mel_mask, out_mel_len = model(
-                        text, src_len, speaker_ids, speaker_table, mel_len, D, f0, energy, max_src_len, max_mel_len)
+                        text, src_len, speaker_ids, mel_len, D, f0, energy, max_src_len, max_mel_len)
                 
                 # Cal Loss
                 mel_loss, mel_postnet_loss, d_loss, f_loss, e_loss = Loss(
