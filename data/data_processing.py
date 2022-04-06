@@ -49,13 +49,15 @@ def build_from_path(in_dir, out_dir, meta):
             
             # !!! 시간이 너무 작아 f0가 없는 것과 Textgrid가 없는 등 상황에서 포함시키지 않음
             # 또한 8초 이상의 데이터는 학습에 방해가 될 수 있기 때문에 제거
+            if float(parts[4]) > 9:
+                print(parts[0], parts[4])
             if ret is None or ret is False or float(parts[4]) > 8:
                 continue
             else:
                 info, n = ret
             
-            # train / val 나누는 과정 5:1로 진행
-            rand = random.randrange(0,6)
+            # train / val 나누는 과정 7:1로 진행
+            rand = random.randrange(0,8)
             if rand < 1:
                 val.append(info)
             else:
@@ -68,7 +70,6 @@ def build_from_path(in_dir, out_dir, meta):
             n_frames += n
             
     param_list = [np.array([scaler.mean_, scaler.scale_]) for scaler in scalers]
-    #print(param_list)
     param_name_list = ['mel_stat.npy', 'f0_stat.npy', 'energy_stat.npy']
     [np.save(os.path.join(out_dir, param_name), param_list[idx]) for idx, param_name in enumerate(param_name_list)]
 
@@ -79,16 +80,22 @@ def process_utterance(in_dir, out_dir, basename, scalers):
     basename[1]=basename[1].replace('.wav','')
 
     wav_path = os.path.join(in_dir, 'wavs', basename[0], '{}.wav'.format(basename[1]))
-    wav_bak_path = os.path.join(in_dir, 'labs', basename[0], '{}.wav'.format(basename[1]))
     
+    # preprocess.py로 이사했습니다
+    """
     # !!! 만약 sampling rate가 16000이면 그대로 wavs로 변경되고 아니면
     # !!! 다른 sampling rate면 16000으로 변경되고 변경된 wav는 wavs 폴더로 저장, lab은 labs에 저장
-    sample_rate, _ = sio.wavfile.read(wav_bak_path)
+    sample_rate, _ = sio.wavfile.read(wav_path)
     # Convert kss data into PCM encoded wavs
     if sample_rate != 16000:
-        os.system("ffmpeg -i {} -ac 1 -ar 16000 {}".format(wav_bak_path, wav_path))  
-    else:
-        os.system("mv " + wav_bak_path + " " +  wav_path)
+        os.system('mv ' + in_dir + '/wavs ' + in_dir + '/wavs_{}'.format(str(sample_rate)))
+        wav_before_path = os.path.join(in_dir, 'wavs_{}'.format(str(sample_rate)), basename[0], '{}.wav'.format(basename[1]))
+        if not os.path.exists(os.path.join(in_dir, 'wavs')):
+            os.mkdir(os.path.join(in_dir, 'wavs'))
+        if not os.path.exists(os.path.join(in_dir, 'wavs', basename[0])):
+            os.mkdir(os.path.join(in_dir, 'wavs', basename[0]))
+        os.system("ffmpeg -i {} -ac 1 -ar 16000 {}".format(wav_before_path, wav_path))
+    """
 
     # Textgrid hparam에 의존하도록 변경
     #tg_path = os.path.join(out_dir, 'TextGrid', '{}.TextGrid'.format(basename)) 

@@ -25,8 +25,11 @@ class FastSpeech2(nn.Module):
         # 싱글일 경우 임베딩 없이 학습 / 멀티일 경우 임베딩 적용 학습
         if len(self.speaker_table) == 1:
             self.single = True
+            print('Now is Single')
         else:
+            print('Now is Multi')
             self.single = False
+        
             
         self.speaker_embeds = Embedding(self.n_speakers, speaker_embed_dim, padding_idx=0, std=speaker_embed_std)
 
@@ -49,14 +52,14 @@ class FastSpeech2(nn.Module):
         src_mask = get_mask_from_lengths(src_len, max_src_len)
         mel_mask = get_mask_from_lengths(mel_len, max_mel_len) if mel_len is not None else None
 
-        if self.single == True: # Single Speaker (Fine-tune)
+        if self.single == True or synthesize == True: # Single Speaker (Fine-tune)
             # 임베딩 없이 학습 / single synthesize도 임베딩 없이 합성
             encoder_output = self.encoder(src_seq, src_mask)
 
         else: # Multi Spekaer (Pre-train)
             speaker_ids_dict = []
             if synthesize == True: # Multi 합성은 현재 합성 결과를 확인하기 위함
-                speaker_ids_dict.append(list(self.speaker_table.values())[-1]) 
+                speaker_ids_dict.append(list(self.speaker_table.values())[-1]) # !!!! 지금 너 필요 없어지려고 해
             else:
                 for id in speaker_ids:
                     speaker_ids_dict.append(self.speaker_table[id])

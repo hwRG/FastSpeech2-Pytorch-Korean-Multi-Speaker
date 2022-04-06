@@ -1,12 +1,18 @@
 import os
 
 # 데이터셋 이름 정하는 것으로 dataset 안에 폴더 하나만 있어야 함
-if os.path.exists(os.listdir('dataset')[0]):
+if os.path.exists('dataset'):
     dataset = os.listdir('dataset')[0]
 else:
     dataset = os.listdir('preprocessed')[0]
 # 만약 dataset이 비었을 때 preprocessed를 활용
-# 없으면 에러 발생 ㄱ
+
+
+# Vocoder
+vocoder = 'hifigan'
+vocoder_pretrained_model_name = dataset + "_g_00805000.pt"
+vocoder_pretrained_model_path = os.path.join("./vocoder/pretrained_models/", vocoder_pretrained_model_name)
+
 
 data_path = os.path.join("./dataset/", dataset)
 meta_name = dataset + "_transcript.txt"
@@ -75,12 +81,6 @@ acc_steps = 1
 betas = (0.9, 0.98)
 eps = 1e-9
 weight_decay = 0.
-
-
-# Vocoder
-vocoder = 'hifigan'
-vocoder_pretrained_model_name = dataset + "_g_00215000.pt"
-vocoder_pretrained_model_path = os.path.join("./vocoder/pretrained_models/", vocoder_pretrained_model_name)
 
 
 # HiFi-GAN parameter

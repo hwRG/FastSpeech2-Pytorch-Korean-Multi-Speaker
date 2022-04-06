@@ -22,7 +22,7 @@ import utils
 import audio as Audio
 
 import codecs
-from g2pk import G2p
+#from g2pk import G2p
 from jamo import h2j
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -30,9 +30,9 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 def kor_preprocess(text):
     text = text.rstrip(punctuation)
     
-    g2p=G2p()
-    #phone = text # !!! G2P 적용 X 
-    phone = g2p(text) # !!! G2P 적용 O
+    #g2p=G2p()
+    phone = text # !!! G2P 적용 X 
+    #phone = g2p(text) # !!! G2P 적용 O
     print('after g2p: ',phone)
     phone = h2j(phone)
     print('after h2j: ',phone)
@@ -90,9 +90,10 @@ def synthesize(model, text, sentence, prefix=''):
 
     # Griffin lim은 잠시 들어가라
     #Audio.tools.inv_mel_spec(mel_postnet_torch[0], os.path.join(hp.test_path, '{}_griffin_lim_{}.wav'.format(prefix, sentence)))
-    utils.hifigan_infer(mel_postnet_torch, path=os.path.join(hp.test_path, '{}_{}.wav'.format(prefix, sentence)))   
-
-    utils.plot_data([(mel_postnet_torch[0].detach().cpu().numpy(), f0_output, energy_output)], ['Synthesized Spectrogram'], filename=os.path.join(hp.test_path, '{}_{}.png'.format(prefix, sentence)))
+    utils.hifigan_infer(mel_postnet_torch, path=os.path.join(hp.test_path, '{}_{}.wav'.format(sentence, prefix)))   
+    if not os.path.exists(hp.test_path + '/plot'):
+        os.mkdir(hp.test_path + '/plot')
+    utils.plot_data([(mel_postnet_torch[0].detach().cpu().numpy(), f0_output, energy_output)], ['Synthesized Spectrogram'], filename=os.path.join(hp.test_path, 'plot/{}_{}.png'.format(sentence, prefix)))
 
 
 if __name__ == "__main__":
@@ -112,7 +113,7 @@ if __name__ == "__main__":
     train_sentence=['가까운 시일 내에 한번, 댁으로 찾아가겠습니다','우리의 승리는 기적에 가까웠다','아이들의 얼굴에는 행복한 미소가 가득했다','헬륨은 공기보다 가볍다','이것은 간단한 문제가 아니다']
     test_sentence='안녕하세요 반갑습니다 테스트랍니다'
     
-    g2p=G2p()
+    #g2p=G2p()
     print('which sentence do you want?')
     print('1.eval_sentence 2.train_sentence 3.test_sentence 4.create new sentence')
 

@@ -167,7 +167,7 @@ def mfa_train():
     os.system('mfa train_g2p ' + dict_name + ' ' + name + '_korean.zip --clear')
     print("MFA train_g2p Done\n")
 
-    os.system('mfa g2p ' + name + '_korean.zip ' + data_dir + ' ' + name + '_korean.txt')
+    os.system('mfa g2p ' + name + '_korean.zip ' + data_dir + ' ' + name + '_korean.txt --clear')
     print("MFA g2p Done\n")
    
     os.system('mfa train ' + data_dir + ' ' + name + '_korean.txt ./textgrids --clean')
@@ -183,7 +183,7 @@ if __name__ == '__main__':
     os.chdir('dataset/' + hp.dataset)
 
     change_name('wavs', 'wav')
-    #change_name('label', 'json')
+   #change_name('label', 'json')
 
     #json_to_transcripts()
     aligner()
