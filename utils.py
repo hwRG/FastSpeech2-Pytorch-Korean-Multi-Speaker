@@ -13,6 +13,7 @@ import hparams as hp
 import os
 import text
 import json
+from pydub import AudioSegment
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -127,7 +128,8 @@ def get_param_num(model):
     return num_param
 
 def plot_data(data, titles=None, filename=None):
-    fig, axes = plt.subplots(len(data), 1, squeeze=False)
+    # total_mel_postnet_torch[0].detach().cpu().numpy()
+    fig, axes = plt.subplots(1, len(data[0][0]), squeeze=False)
     if titles is None:
         titles = [None for i in range(len(data))]
 
@@ -135,31 +137,35 @@ def plot_data(data, titles=None, filename=None):
         ax = fig.add_axes(old_ax.get_position(), anchor='W')
         ax.set_facecolor("None")
         return ax
-
     for i in range(len(data)):
-        spectrogram, pitch, energy = data[i]
-        axes[i][0].imshow(spectrogram, origin='lower')
-        axes[i][0].set_aspect(2.5, adjustable='box')
-        axes[i][0].set_ylim(0, hp.n_mel_channels)
-        axes[i][0].set_title(titles[i], fontsize='medium')
-        axes[i][0].tick_params(labelsize='x-small', left=False, labelleft=False) 
-        axes[i][0].set_anchor('W')
+        spectrograms, pitchs, energies = data[i] 
+        for j in range(len(spectrograms)):
+            spectrogram = spectrograms[j][0].detach().cpu().numpy() # Spectrogram은 통째로 받아서 사용할 때 0번째 numpy로 재정의
+            
+            axes[0][j].imshow(spectrogram, origin='lower')
+            axes[0][j].set_aspect(2.5, adjustable='box')
+            axes[0][j].set_ylim(0, hp.n_mel_channels)
+            #axes[0][j].set_title(titles[0]+'_'+str(j), fontsize='medium')
+            axes[0][j].set_title(str(j), fontsize='medium')
+            axes[0][j].tick_params(labelsize='x-small', left=False, labelleft=False) 
+            axes[0][j].set_anchor('W')
+            
+            ax1 = add_axis(fig, axes[0][j])
+            ax1.plot(pitchs[j], color='tomato')
+            ax1.set_xlim(0, spectrogram.shape[1])
+            ax1.set_ylim(0, hp.f0_max)
+            ax1.set_ylabel('F0', color='tomato')
+            ax1.tick_params(labelsize='x-small', colors='tomato', bottom=False, labelbottom=False)
+            
+            ax2 = add_axis(fig, axes[0][j], 1.2)
+            ax2.plot(energies[j], color='darkviolet')
+            ax2.set_xlim(0, spectrogram.shape[1])
+            ax2.set_ylim(hp.energy_min, hp.energy_max)
+            ax2.set_ylabel('Energy', color='darkviolet')
+            ax2.yaxis.set_label_position('right')
+            ax2.tick_params(labelsize='x-small', colors='darkviolet', bottom=False, labelbottom=False, left=False, labelleft=False, right=True, labelright=True)
         
-        ax1 = add_axis(fig, axes[i][0])
-        ax1.plot(pitch, color='tomato')
-        ax1.set_xlim(0, spectrogram.shape[1])
-        ax1.set_ylim(0, hp.f0_max)
-        ax1.set_ylabel('F0', color='tomato')
-        ax1.tick_params(labelsize='x-small', colors='tomato', bottom=False, labelbottom=False)
-        
-        ax2 = add_axis(fig, axes[i][0], 1.2)
-        ax2.plot(energy, color='darkviolet')
-        ax2.set_xlim(0, spectrogram.shape[1])
-        ax2.set_ylim(hp.energy_min, hp.energy_max)
-        ax2.set_ylabel('Energy', color='darkviolet')
-        ax2.yaxis.set_label_position('right')
-        ax2.tick_params(labelsize='x-small', colors='darkviolet', bottom=False, labelbottom=False, left=False, labelleft=False, right=True, labelright=True)
-    
+    #curFilename = filename[:-4] + '_' + str(i) + filename[-4:]
     plt.savefig(filename, dpi=200)
     plt.close()
 
@@ -202,21 +208,20 @@ def get_hifigan(ckpt_path):
     return model
 
 
-def vocgan_infer(mel, vocoder, path):
-    model = vocoder
+def combine_wav(path, cnt):
+    for i in range(cnt):
+        curPath = path[:-4] + '_' + str(i+1) + path[-4:]
+        if i == 0:
+            combined_sounds = AudioSegment.from_wav(curPath)
+        else:
+            combined_sounds += AudioSegment.from_wav(curPath)
+        os.remove(curPath)
 
-    with torch.no_grad():
-        if len(mel.shape) == 2:
-            mel = mel.unsqueeze(0)
+    combined_sounds.export(path, format="wav")
+    print(path, 'done')
 
-        audio = model.infer(mel).squeeze()
-        audio = hp.max_wav_value * audio[:-(hp.hop_length*10)]
-        audio = audio.clamp(min=-hp.max_wav_value, max=hp.max_wav_value-1)
-        audio = audio.short().cpu().detach().numpy()
 
-        wavfile.write(path, hp.sampling_rate, audio)
-
-def hifigan_infer(mel, path):
+def hifigan_infer(mel_list, path):
 
     if torch.cuda.is_available():
         torch.cuda.manual_seed(1234)
@@ -230,15 +235,20 @@ def hifigan_infer(mel, path):
 
     generator.eval()
     generator.remove_weight_norm()
-    with torch.no_grad():
-        x = mel
-        y_g_hat = generator(x)
-        audio = y_g_hat.squeeze()
-        audio = audio * 32768.0 # MAX_WAV_VALUE
-        audio = audio.cpu().numpy().astype('int16')
+    cnt = 0
+    for mel in mel_list:
+        cnt += 1
+        with torch.no_grad():
+            x = mel
+            y_g_hat = generator(x)
+            audio = y_g_hat.squeeze()
+            audio = audio * 32768.0 # MAX_WAV_VALUE
+            audio = audio.cpu().numpy().astype('int16')
+            curPath = path[:-4] + '_' + str(cnt) + path[-4:]
+            wavfile.write(curPath, hp.sampling_rate, audio)
+            print(curPath, 'done')
 
-        wavfile.write(path, hp.sampling_rate, audio)
-        print(path, 'done')
+    combine_wav(path, cnt)
 
 
 def pad_1D(inputs, PAD=0):

@@ -22,7 +22,7 @@ import utils
 import audio as Audio
 
 import codecs
-#from g2pk import G2p
+from g2pk import G2p
 from jamo import h2j
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -30,9 +30,9 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 def kor_preprocess(text):
     text = text.rstrip(punctuation)
     
-    #g2p=G2p()
-    phone = text # !!! G2P 적용 X 
-    #phone = g2p(text) # !!! G2P 적용 O
+    g2p=G2p()
+    #phone = text # !!! G2P 적용 X 
+    phone = g2p(text) # !!! G2P 적용 O
     print('after g2p: ',phone)
     phone = h2j(phone)
     print('after h2j: ',phone)
@@ -48,8 +48,7 @@ def kor_preprocess(text):
     sequence = np.stack([sequence])
     return torch.from_numpy(sequence).long().to(device)
 
-# !! get FastSpeech에서도 n_speaker를 추가해 주어야 함
-# !!!!! n_speakers 필요 없는데 이미 ckpt에서 사용했어서 필요함..
+
 def get_FastSpeech2(num):
     checkpoint_path = os.path.join(hp.checkpoint_path, "checkpoint_{}.pth.tar".format(num))
     model = nn.DataParallel(FastSpeech2())
@@ -58,21 +57,11 @@ def get_FastSpeech2(num):
     model.eval()
     return model
 
-def synthesize(model, text, sentence, prefix=''):
-    sentence = sentence[:20] # long filename will result in OS Error
 
-    mean_mel, std_mel = torch.tensor(np.load(os.path.join(hp.preprocessed_path, "mel_stat.npy")), dtype=torch.float).to(device)
-    mean_f0, std_f0 = torch.tensor(np.load(os.path.join(hp.preprocessed_path, "f0_stat.npy")), dtype=torch.float).to(device)
-    mean_energy, std_energy = torch.tensor(np.load(os.path.join(hp.preprocessed_path, "energy_stat.npy")), dtype=torch.float).to(device)
-
-    mean_mel, std_mel = mean_mel.reshape(1, -1), std_mel.reshape(1, -1)
-    mean_f0, std_f0 = mean_f0.reshape(1, -1), std_f0.reshape(1, -1)
-    mean_energy, std_energy = mean_energy.reshape(1, -1), std_energy.reshape(1, -1)
-
+def fastspeech2_inference(model, text, mean_mel, std_mel, mean_f0, std_f0, mean_energy, std_energy, total_mel_postnet_torch, total_f0_output, total_energy_output):
+    text = kor_preprocess(text)
     src_len = torch.from_numpy(np.array([text.shape[1]])).to(device)
 
-    # Multi-speaker 테스트면 그냥 제일 첫 번째 사람을 지목,
-    # single-speaker의 경우에는 제일 앞 본인을 선택할 수 있도록 ids[0]
     mel, mel_postnet, log_duration_output, f0_output, energy_output, _, _, mel_len = model(text, src_len, synthesize=True)
     
     mel_torch = mel.transpose(1, 2).detach()
@@ -84,16 +73,60 @@ def synthesize(model, text, sentence, prefix=''):
     mel_postnet_torch = utils.de_norm(mel_postnet_torch.transpose(1, 2), mean_mel, std_mel).transpose(1, 2)
     f0_output = utils.de_norm(f0_output, mean_f0, std_f0).squeeze().detach().cpu().numpy()
     energy_output = utils.de_norm(energy_output, mean_energy, std_energy).squeeze().detach().cpu().numpy()
+    
+    total_mel_postnet_torch.append(mel_postnet_torch)
+    total_f0_output.append(f0_output)
+    total_energy_output.append(energy_output)
+
+
+def synthesize(model, text, sentence, prefix=''):
+    sentence = sentence.split(' ')[:6]
+    sent = ''
+    for i in sentence:
+        sent += i + ' '
+    sentence = sent
+
+    mean_mel, std_mel = torch.tensor(np.load(os.path.join(hp.preprocessed_path, "mel_stat.npy")), dtype=torch.float).to(device)
+    mean_f0, std_f0 = torch.tensor(np.load(os.path.join(hp.preprocessed_path, "f0_stat.npy")), dtype=torch.float).to(device)
+    mean_energy, std_energy = torch.tensor(np.load(os.path.join(hp.preprocessed_path, "energy_stat.npy")), dtype=torch.float).to(device)
+
+    mean_mel, std_mel = mean_mel.reshape(1, -1), std_mel.reshape(1, -1)
+    mean_f0, std_f0 = mean_f0.reshape(1, -1), std_f0.reshape(1, -1)
+    mean_energy, std_energy = mean_energy.reshape(1, -1), std_energy.reshape(1, -1)
+
+
+    text_list = text.split(' ')
+    wordCnt = 0
+    totalCnt = 0
+    text = ''
+    sentence_list = []
+    total_mel_postnet_torch = []; total_f0_output = []; total_energy_output = []
+    for word in text_list:
+        text += word + ' '
+        wordCnt += 1
+
+        # 하이퍼 파라미터로 사용하면 좋은 항목
+        if wordCnt == 3:
+            sentence_list.append(text)
+            wordCnt = 0
+            fastspeech2_inference(model, text, mean_mel, std_mel, mean_f0, std_f0, mean_energy, std_energy,
+                                  total_mel_postnet_torch, total_f0_output, total_energy_output)
+            text = ''
+            totalCnt += 1
+
+    if wordCnt > 0:
+        sentence_list.append(text)
+        fastspeech2_inference(model, text, mean_mel, std_mel, mean_f0, std_f0, mean_energy, std_energy, 
+                              total_mel_postnet_torch, total_f0_output, total_energy_output)
 
     if not os.path.exists(hp.test_path):
         os.makedirs(hp.test_path)
 
-    # Griffin lim은 잠시 들어가라
     #Audio.tools.inv_mel_spec(mel_postnet_torch[0], os.path.join(hp.test_path, '{}_griffin_lim_{}.wav'.format(prefix, sentence)))
-    utils.hifigan_infer(mel_postnet_torch, path=os.path.join(hp.test_path, '{}_{}.wav'.format(sentence, prefix)))   
+    utils.hifigan_infer(total_mel_postnet_torch, path=os.path.join(hp.test_path, '{}_{}_{}.wav'.format(sentence, prefix, hp.vocoder_pretrained_model_name)))   
     if not os.path.exists(hp.test_path + '/plot'):
         os.mkdir(hp.test_path + '/plot')
-    utils.plot_data([(mel_postnet_torch[0].detach().cpu().numpy(), f0_output, energy_output)], ['Synthesized Spectrogram'], filename=os.path.join(hp.test_path, 'plot/{}_{}.png'.format(sentence, prefix)))
+    utils.plot_data([(total_mel_postnet_torch, total_f0_output, total_energy_output)], sentence_list, filename=os.path.join(hp.test_path, 'plot/{}_{}_{}.png'.format(sentence, prefix, hp.vocoder_pretrained_model_name)))
 
 
 if __name__ == "__main__":
@@ -102,18 +135,17 @@ if __name__ == "__main__":
     parser.add_argument('--step', type=str, default=80000)
     args = parser.parse_args()
 
-    # !!!!! 이부분 코드 너무 잘못 짬 추후 수정 필요
     n_speakers, _ = utils.get_speakers()
     n_speakers = torch.tensor(n_speakers).to(device)
 
     model = get_FastSpeech2(args.step).to(device)
 
-    #kss
+    #kss 기준
     eval_sentence=['그는 괜찮은 척하려고 애쓰는 것 같았다','그녀의 사랑을 얻기 위해 애썼지만 헛수고였다','용돈을 아껴써라','그는 아내를 많이 아낀다','요즘 공부가 안돼요','한 여자가 내 옆에 앉았다']
     train_sentence=['가까운 시일 내에 한번, 댁으로 찾아가겠습니다','우리의 승리는 기적에 가까웠다','아이들의 얼굴에는 행복한 미소가 가득했다','헬륨은 공기보다 가볍다','이것은 간단한 문제가 아니다']
     test_sentence='안녕하세요 반갑습니다 테스트랍니다'
     
-    #g2p=G2p()
+    g2p=G2p()
     print('which sentence do you want?')
     print('1.eval_sentence 2.train_sentence 3.test_sentence 4.create new sentence')
 
@@ -131,12 +163,12 @@ if __name__ == "__main__":
     else:
         exit()
     
-    print('sentence that will be synthesized: ')
+    print('Sentence that will be synthesized: ')
     print(sentence)
     if mode == '1' or mode== '2':
         for sent in sentence:
-            text = kor_preprocess(sent)
-            synthesize(model, text, sent, prefix='step_{}'.format(args.step))
+            #text = kor_preprocess(sent)
+            synthesize(model, sent, sent, prefix='step_{}'.format(args.step))
     else:
-        text = kor_preprocess(sentence)
-        synthesize(model, text, sentence, prefix='step_{}'.format(args.step))
+        #text = kor_preprocess(sentence)
+        synthesize(model, sentence, sentence, prefix='step_{}'.format(args.step))

@@ -10,7 +10,7 @@ else:
 
 # Vocoder
 vocoder = 'hifigan'
-vocoder_pretrained_model_name = dataset + "_g_00805000.pt"
+vocoder_pretrained_model_name = dataset + "_g_00410000.pt"
 vocoder_pretrained_model_path = os.path.join("./vocoder/pretrained_models/", vocoder_pretrained_model_name)
 
 
@@ -21,6 +21,7 @@ textgrid_name = "textgrids.zip"
 ### set GPU number ###
 train_visible_devices = "0,1"
 synth_visible_devices = "1"
+
 
 # Text
 text_cleaners = ['korean_cleaners']
