@@ -98,6 +98,8 @@ def synthesize(model, text, sentence, prefix=''):
     text_list = text.split(' ')
     wordCnt = 0
     totalCnt = 0
+    stop_token = ',.?!~/'
+    synth_flag = False
     text = ''
     sentence_list = []
     total_mel_postnet_torch = []; total_f0_output = []; total_energy_output = []
@@ -105,14 +107,22 @@ def synthesize(model, text, sentence, prefix=''):
         text += word + ' '
         wordCnt += 1
 
-        # 하이퍼 파라미터로 사용하면 좋은 항목
-        if wordCnt == 3:
+        # 하이퍼 파라미터로 사용하면 좋은 시점
+        # 5개 또는 5개 아래의 경우, 기호로 끊음(,./; 등)
+        for stop in stop_token:
+            if word[-1] == stop:
+                synth_flag = True
+                break
+
+        #if wordCnt == 5 or synth_flag:
+        if wordCnt == 5 or synth_flag:
             sentence_list.append(text)
             wordCnt = 0
             fastspeech2_inference(model, text, mean_mel, std_mel, mean_f0, std_f0, mean_energy, std_energy,
                                   total_mel_postnet_torch, total_f0_output, total_energy_output)
             text = ''
             totalCnt += 1
+            synth_flag = False
 
     if wordCnt > 0:
         sentence_list.append(text)
@@ -141,13 +151,19 @@ if __name__ == "__main__":
     model = get_FastSpeech2(args.step).to(device)
 
     #kss 기준
-    eval_sentence=['그는 괜찮은 척하려고 애쓰는 것 같았다','그녀의 사랑을 얻기 위해 애썼지만 헛수고였다','용돈을 아껴써라','그는 아내를 많이 아낀다','요즘 공부가 안돼요','한 여자가 내 옆에 앉았다']
-    train_sentence=['가까운 시일 내에 한번, 댁으로 찾아가겠습니다','우리의 승리는 기적에 가까웠다','아이들의 얼굴에는 행복한 미소가 가득했다','헬륨은 공기보다 가볍다','이것은 간단한 문제가 아니다']
+    train_sentence=['그는 괜찮은 척하려고 애쓰는 것 같았다','그녀의 사랑을 얻기 위해 애썼지만 헛수고였다','용돈을 아껴써라','그는 아내를 많이 아낀다','요즘 공부가 안돼요','한 여자가 내 옆에 앉았다']
+    #train_sentence=['가까운 시일 내에 한번, 댁으로 찾아가겠습니다','우리의 승리는 기적에 가까웠다','아이들의 얼굴에는 행복한 미소가 가득했다','헬륨은 공기보다 가볍다','이것은 간단한 문제가 아니다']
+    eval_sentence=['교수님 말씀이 너무 많아. 조금만 적으면 좋겠어. 시간아 빨리좀 가라.. 힘들다 힘들어',
+                    '어제 들었는데, 윌라과제 하기로 했대. 그래서 홈페이지가서 봤더니, 벌써 올라와 있더라고. 업데이트가 진짜 빠른것 같아.',
+                    '너무 졸린데, 과제 언제 다하지.. 그냥 때려치울까? 안돼 그거는.. 대학생으로서의 도리가 아니야. 힘내자 나자신아.',
+                    '목소리 테스트하는데, 대본을 쓸게 없는거야. 그래서 어떤걸 쓸까 했는데, 지금 고민하는 대사를 쓰면 되더라고.',
+                    '나는 지금 대학교 4학년이고, 졸업을 앞두고 있다. 졸업 이후에는 대학원과 취업이 있는데, 병특 때문에 어떻게할지 모르겠어.',
+                    '대본을 이정도 썼으면, 테스트 하기에는 충분하겠지? 빨리 추가로 대본녹음 해야하는데, 하기가 은근히 귀찮네']
     test_sentence='안녕하세요 반갑습니다 테스트랍니다'
     
     g2p=G2p()
     print('which sentence do you want?')
-    print('1.eval_sentence 2.train_sentence 3.test_sentence 4.create new sentence')
+    print('1.Experient_sentence 2.train_sentence 3.test_sentence 4.create new sentence')
 
     mode=input()
     print('you went for mode {}'.format(mode))

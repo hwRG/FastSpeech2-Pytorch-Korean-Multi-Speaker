@@ -61,7 +61,7 @@ def get_speakers():
 def Embedding(num_embeddings, embedding_dim, padding_idx, std=0.01):
     # !!!! 54개까지 스피커를 두었는데, 실제로 넣는건 이름으로 '100064' 넣어서 문제 생기는 듯
     m = nn.Embedding(num_embeddings, embedding_dim, padding_idx=padding_idx)
-    #m.weight.data.normal_(0, std)
+    m.weight.data.normal_(0, std) # weight를 normalize하는 과정
     return m
 
 # !! 스피커를 하나로 통합하는 모듈 구현 

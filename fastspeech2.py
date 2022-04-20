@@ -25,10 +25,10 @@ class FastSpeech2(nn.Module):
         # 싱글일 경우 임베딩 없이 학습 / 멀티일 경우 임베딩 적용 학습
         if len(self.speaker_table) == 1:
             self.single = True
-            print('Now is Single')
+            print('Single Speaker')
         else:
-            print('Now is Multi')
             self.single = False
+            print('Multi Speaker')
         
             
         self.speaker_embeds = Embedding(self.n_speakers, speaker_embed_dim, padding_idx=0, std=speaker_embed_std)
