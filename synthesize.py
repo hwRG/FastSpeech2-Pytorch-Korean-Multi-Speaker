@@ -49,9 +49,9 @@ def kor_preprocess(text):
     return torch.from_numpy(sequence).long().to(device)
 
 
-def get_FastSpeech2(num):
+def get_FastSpeech2(num, synthesize=False):
     checkpoint_path = os.path.join(hp.checkpoint_path, "checkpoint_{}.pth.tar".format(num))
-    model = nn.DataParallel(FastSpeech2())
+    model = nn.DataParallel(FastSpeech2(synthesize=synthesize))
     model.load_state_dict(torch.load(checkpoint_path, map_location=device)['model'])
     model.requires_grad = False
     model.eval()
@@ -109,13 +109,15 @@ def synthesize(model, text, sentence, prefix=''):
 
         # 하이퍼 파라미터로 사용하면 좋은 시점
         # 5개 또는 5개 아래의 경우, 기호로 끊음(,./; 등)
-        for stop in stop_token:
-            if word[-1] == stop:
-                synth_flag = True
-                break
+        if wordCnt == 5:
+            synth_flag = True
+        else:
+            for stop in stop_token:
+                if word[-1] == stop:
+                    synth_flag = True
+                    break
 
-        #if wordCnt == 5 or synth_flag:
-        if wordCnt == 5 or synth_flag:
+        if synth_flag:
             sentence_list.append(text)
             wordCnt = 0
             fastspeech2_inference(model, text, mean_mel, std_mel, mean_f0, std_f0, mean_energy, std_energy,
@@ -133,7 +135,7 @@ def synthesize(model, text, sentence, prefix=''):
         os.makedirs(hp.test_path)
 
     #Audio.tools.inv_mel_spec(mel_postnet_torch[0], os.path.join(hp.test_path, '{}_griffin_lim_{}.wav'.format(prefix, sentence)))
-    utils.hifigan_infer(total_mel_postnet_torch, path=os.path.join(hp.test_path, '{}_{}_{}.wav'.format(sentence, prefix, hp.vocoder_pretrained_model_name)))   
+    utils.hifigan_infer(total_mel_postnet_torch, path=os.path.join(hp.test_path, '{}_{}_{}.wav'.format(sentence, prefix, hp.vocoder_pretrained_model_name)), synthesize=True)   
     if not os.path.exists(hp.test_path + '/plot'):
         os.mkdir(hp.test_path + '/plot')
     utils.plot_data([(total_mel_postnet_torch, total_f0_output, total_energy_output)], sentence_list, filename=os.path.join(hp.test_path, 'plot/{}_{}_{}.png'.format(sentence, prefix, hp.vocoder_pretrained_model_name)))
@@ -145,10 +147,10 @@ if __name__ == "__main__":
     parser.add_argument('--step', type=str, default=80000)
     args = parser.parse_args()
 
-    n_speakers, _ = utils.get_speakers()
-    n_speakers = torch.tensor(n_speakers).to(device)
+    #n_speakers, _ = utils.get_speakers(True)
+    #n_speakers = torch.tensor(n_speakers).to(device)
 
-    model = get_FastSpeech2(args.step).to(device)
+    model = get_FastSpeech2(args.step, True).to(device)
 
     #kss 기준
     train_sentence=['그는 괜찮은 척하려고 애쓰는 것 같았다','그녀의 사랑을 얻기 위해 애썼지만 헛수고였다','용돈을 아껴써라','그는 아내를 많이 아낀다','요즘 공부가 안돼요','한 여자가 내 옆에 앉았다']

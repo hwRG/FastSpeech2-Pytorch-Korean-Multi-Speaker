@@ -14,11 +14,11 @@ class FastSpeech2(nn.Module):
     """ FastSpeech2 """
 
     # !! embedding을 위한 파라미터 추가
-    def __init__(self, speaker_embed_dim=256, speaker_embed_std=0.01, use_postnet=True):
+    def __init__(self, speaker_embed_dim=256, speaker_embed_std=0.01, use_postnet=True, synthesize=False):
         super(FastSpeech2, self).__init__()
 
         # !! speaker embedding 추가
-        self.n_speakers, self.speaker_table = get_speakers()
+        self.n_speakers, self.speaker_table = get_speakers(synthesize)
         self.speaker_embed_dim = speaker_embed_dim
         self.speaker_embed_std = speaker_embed_std
 
@@ -58,11 +58,12 @@ class FastSpeech2(nn.Module):
 
         else: # Multi Spekaer (Pre-train)
             speaker_ids_dict = []
-            if synthesize == True: # Multi 합성은 현재 합성 결과를 확인하기 위함
-                speaker_ids_dict.append(list(self.speaker_table.values())[-1]) # !!!! 지금 너 필요 없어지려고 해
-            else:
-                for id in speaker_ids:
-                    speaker_ids_dict.append(self.speaker_table[id])
+            #if synthesize == True: # Multi 합성은 현재 합성 결과를 확인하기 위함
+            #    print(list(self.speaker_table.values())[0])
+            #    speaker_ids_dict.append(list(self.speaker_table.values())[0]) # !!!! 지금 너 필요 없어지려고 해
+            
+            for id in speaker_ids:
+                speaker_ids_dict.append(self.speaker_table[id])
             # 지정된 임베딩 값을 텐서로 변환하여 배치에 맞게 돌아가게 함 
             speaker_ids_dict = torch.tensor(speaker_ids_dict).long().to(device)
             # !! 스피커 임베딩 레이어 추가

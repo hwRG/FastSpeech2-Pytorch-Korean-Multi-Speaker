@@ -129,8 +129,8 @@ def evaluate(model, step, speaker_table, vocoder=None):
                         energy_ = utils.de_norm(energy_, mean_energy, std_energy).detach().cpu().numpy()
                         energy_output_ = utils.de_norm(energy_output_, mean_energy, std_energy).detach().cpu().numpy()
  
-                        utils.plot_data([(mel_postnet.numpy(), f0_output_, energy_output_), (mel_target_.numpy(), f0_, energy_)], 
-                            ['Synthesized Spectrogram', 'Ground-Truth Spectrogram'], filename=os.path.join(hp.eval_path, 'eval_step_{}_{}.png'.format(step, basename)))
+                        #utils.plot_data([(mel_postnet.numpy(), f0_output_, energy_output_), (mel_target_.numpy(), f0_, energy_)], 
+                        #    ['Synthesized Spectrogram', 'Ground-Truth Spectrogram'], filename=os.path.join(hp.eval_path, 'eval_step_{}_{}.png'.format(step, basename)))
                         idx += 1
                     print("done")
             current_step += 1            

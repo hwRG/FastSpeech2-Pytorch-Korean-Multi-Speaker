@@ -10,7 +10,7 @@ else:
 
 # Vocoder
 vocoder = 'hifigan'
-vocoder_pretrained_model_name = dataset + "_g_00805000_oldman_finetune.pt"
+vocoder_pretrained_model_name = dataset + "_g_00410000_selectman_finetune.pt"
 vocoder_pretrained_model_path = os.path.join("./vocoder/pretrained_models/", vocoder_pretrained_model_name)
 
 

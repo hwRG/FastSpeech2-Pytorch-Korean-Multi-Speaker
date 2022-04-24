@@ -17,16 +17,24 @@ from pydub import AudioSegment
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+import matplotlib.font_manager as fm
+
 # !! Speaker 불러오기
-def get_speakers():
+def get_speakers(synthesize=False):
     path = 'preprocessed/' + hp.dataset + '/alignment'
     file_list = os.listdir(path)
     file_list.sort()
     n_speakers = len(file_list)
     speaker_table = {}
     
+    if synthesize:
+        with open('speaker_info.json', 'r') as f:
+            pre_speakers = json.load(f)
+        n_speakers =  pre_speakers['n_speakers']
+        speaker_table = pre_speakers['speaker_table']
+        
     # Multi-speaker training 하는 경우 테이블 내용 저장
-    if n_speakers > 1:
+    elif n_speakers > 1:
         speakers = {}
         speakers['n_speakers'] = n_speakers
         cnt = 0
@@ -127,7 +135,10 @@ def get_param_num(model):
     num_param = sum(param.numel() for param in model.parameters())
     return num_param
 
-def plot_data(data, titles=None, filename=None):
+def plot_data(data, sentence_list, titles=None, filename=None):
+    fonts = 'data/NanumGothic.ttf'
+    fontprop = fm.FontProperties(fname=fonts)
+
     # total_mel_postnet_torch[0].detach().cpu().numpy()
     fig, axes = plt.subplots(1, len(data[0][0]), squeeze=False)
     if titles is None:
@@ -137,6 +148,7 @@ def plot_data(data, titles=None, filename=None):
         ax = fig.add_axes(old_ax.get_position(), anchor='W')
         ax.set_facecolor("None")
         return ax
+    plt.rcParams["figure.figsize"] = (10,4)
     for i in range(len(data)):
         spectrograms, pitchs, energies = data[i] 
         for j in range(len(spectrograms)):
@@ -146,7 +158,7 @@ def plot_data(data, titles=None, filename=None):
             axes[0][j].set_aspect(2.5, adjustable='box')
             axes[0][j].set_ylim(0, hp.n_mel_channels)
             #axes[0][j].set_title(titles[0]+'_'+str(j), fontsize='medium')
-            axes[0][j].set_title(str(j), fontsize='medium')
+            axes[0][j].set_title(sentence_list[j], fontsize='medium', fontproperties=fontprop)
             axes[0][j].tick_params(labelsize='x-small', left=False, labelleft=False) 
             axes[0][j].set_anchor('W')
             
@@ -166,6 +178,7 @@ def plot_data(data, titles=None, filename=None):
             ax2.tick_params(labelsize='x-small', colors='darkviolet', bottom=False, labelbottom=False, left=False, labelleft=False, right=True, labelright=True)
         
     #curFilename = filename[:-4] + '_' + str(i) + filename[-4:]
+    
     plt.savefig(filename, dpi=200)
     plt.close()
 
@@ -221,7 +234,7 @@ def combine_wav(path, cnt):
     print(path, 'done')
 
 
-def hifigan_infer(mel_list, path):
+def hifigan_infer(mel_list, path, synthesize=False):
 
     if torch.cuda.is_available():
         torch.cuda.manual_seed(1234)
@@ -239,6 +252,8 @@ def hifigan_infer(mel_list, path):
     for mel in mel_list:
         cnt += 1
         with torch.no_grad():
+            if not synthesize:
+                mel = torch.unsqueeze(mel, 0)
             x = mel
             y_g_hat = generator(x)
             audio = y_g_hat.squeeze()
