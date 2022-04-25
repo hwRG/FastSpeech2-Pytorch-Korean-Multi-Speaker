@@ -88,7 +88,6 @@ def main(args):
         vocoder.to(device)
     else:
         vocoder = None
-
     # Init logger
     log_path = hp.log_path
     if not os.path.exists(log_path):

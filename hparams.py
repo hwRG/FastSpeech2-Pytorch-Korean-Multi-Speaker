@@ -10,7 +10,7 @@ else:
 
 # Vocoder
 vocoder = 'hifigan'
-vocoder_pretrained_model_name = dataset + "_g_00410000_selectman_finetune.pt"
+vocoder_pretrained_model_name = dataset + "_g_00520000_com_select_woman_fine.pt"
 vocoder_pretrained_model_path = os.path.join("./vocoder/pretrained_models/", vocoder_pretrained_model_name)
 
 
@@ -73,7 +73,7 @@ test_path = "./results"
 
 
 # Optimizer
-batch_size = 16
+batch_size = 32
 epochs = 10000
 n_warm_up_step = 4000
 grad_clip_thresh = 1.0

@@ -41,7 +41,12 @@ def main():
         
     speakers = os.listdir(os.path.join(in_dir, 'wavs'))
     sample_data = os.listdir(os.path.join(in_dir, 'wavs', speakers[0]))
-    sample_rate, _ = sio.wavfile.read(os.path.join(in_dir, 'wavs', speakers[0], sample_data[1]))
+    for sample_wav in sample_data:
+        if sample_wav[-3:] == 'wav':
+            temp = sample_wav
+            print(temp, '\n\n\n')
+            break
+    sample_rate, _ = sio.wavfile.read(os.path.join(in_dir, 'wavs', speakers[0], temp))
     
     
     # Sampling rate가 다를 경우 원래 파일을 sampling rate 폴더명으로 변경하고 새로 16000인 wav 폴더 생성 
