@@ -10,7 +10,7 @@ else:
 
 # Vocoder
 vocoder = 'hifigan'
-vocoder_pretrained_model_name = dataset + "_g_00520000_com_select_woman_fine.pt"
+vocoder_pretrained_model_name = dataset + "_g_00260000_15pre.pt"
 vocoder_pretrained_model_path = os.path.join("./vocoder/pretrained_models/", vocoder_pretrained_model_name)
 
 
@@ -73,7 +73,7 @@ test_path = "./results"
 
 
 # Optimizer
-batch_size = 32
+batch_size = 8
 epochs = 10000
 n_warm_up_step = 4000
 grad_clip_thresh = 1.0
@@ -90,7 +90,7 @@ upsample_rates = [8,8,2,2]
 resblock = "1"
 upsample_rates = [8,8,2,2]
 upsample_kernel_sizes = [16,16,4,4]
-upsample_initial_channel = 128
+upsample_initial_channel = 512
 resblock_kernel_sizes = [3,7,11]
 resblock_dilation_sizes = [[1,3,5], [1,3,5], [1,3,5]]
 # 실수로 컴마까지 다 가져와버림

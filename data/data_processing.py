@@ -56,8 +56,8 @@ def build_from_path(in_dir, out_dir, meta):
             else:
                 info, n = ret
             
-            # train / val 나누는 과정 7:1로 진행
-            rand = random.randrange(0,8)
+            # train / val 나누는 과정 9:1로 진행
+            rand = random.randrange(0,10)
             if rand < 1:
                 val.append(info)
             else:

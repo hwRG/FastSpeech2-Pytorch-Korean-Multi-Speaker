@@ -178,6 +178,16 @@ def mfa_train():
     print("MFA Training Done! \n")
     
 
+def lab_separate():
+    speaker_list = os.listdir('wavs')
+    os.mkdir('lab')
+    for speaker in speaker_list:
+        os.mkdir('lab/' + speaker)
+        lab_list = os.listdir(os.path.join('wavs', speaker))
+        for lab in lab_list:
+            if lab[-3:] == 'lab':
+                os.system('mv ' 'wavs/' + speaker + '/' + lab + ' lab/' + speaker)
+
 
 if __name__ == '__main__':
     os.chdir('dataset/' + hp.dataset)
@@ -189,3 +199,4 @@ if __name__ == '__main__':
     aligner()
 
     mfa_train()
+    lab_separate()
