@@ -8,9 +8,7 @@ FastSpeech2에 HiFi-GAN Vocoder를 결합하여, 한국어 Multi-Speaker TTS로 
 
 본 프로젝트는 [한동대 DLLAB](https://github.com/HGU-DLLAB/Korean-FastSpeech2-Pytorch)에서 구현한 한국어 데이터셋 [KSS](http://kaggle.com/bryanpark/korean-single-speaker-speech-dataset)에서 동작하는 FastSpeech2 소스 코드를 기반으로 구현했습니다.
 
-
-
-
+<br>
 
 ## Introduction
 
@@ -18,9 +16,7 @@ FastSpeech2에 HiFi-GAN Vocoder를 결합하여, 한국어 Multi-Speaker TTS로 
 
 - AI 스피커라는 즉각적인 생성에 대응하기 위해 기존에 뛰어난 성능의 Tacotron2와 Waveglow 대신 **Non-Autoregressive Acoustic Model FastSpeech2**과 **GAN 기반 Vocoder Model HiFi-GAN**을 채택하여 퀄리티와 생성 속도 모두 고려할 수 있도록 합니다.
 
-
-
-
+<br>
 
 ## Project Purpose
 
@@ -31,9 +27,7 @@ FastSpeech2에 HiFi-GAN Vocoder를 결합하여, 한국어 Multi-Speaker TTS로 
 3. Pre-train을 위한 Multi-Speaker 데이터를 학습하기 위해 Speaker Embedding 구현 
 4. 한국어 데이터셋에 학습 전 과정이 end-to-end로 수행될 수 있도록 파이프라인 구성
 
-
-
-
+<br>
 
 ## Dataset
 
@@ -41,9 +35,7 @@ FastSpeech2에 HiFi-GAN Vocoder를 결합하여, 한국어 Multi-Speaker TTS로 
 - 데이터, 스피커 명이 숫자 6자리가 포함되도록 수정합니다. 
 - ~~제시된 스크립트를 통해 약 45분 분량의 음성 데이터를 메뉴얼에 따라 녹음합니다. (준비 중)~~
 
-
-
-
+<br>
 
 ## Add from Previous Project
 
@@ -69,9 +61,7 @@ FastSpeech2에 HiFi-GAN Vocoder를 결합하여, 한국어 Multi-Speaker TTS로 
 
    - 기존 [G2pk](https://github.com/Kyubyong/g2pK)의 패키지를 pip 설치 없이 숫자, 영어만 한글로 변환 하도록 수정
 
-
-
-
+<br>
 
 ## How to Train
 
@@ -85,18 +75,14 @@ FastSpeech2에 HiFi-GAN Vocoder를 결합하여, 한국어 Multi-Speaker TTS로 
 5. hparam.py의 batch size, HiFi-GAN generator의 path 등 설정 후 train.py를 실행합니다.
    - 이후 재 학습을 하게 될 경우 train.py --restore_step [step수]로 재학습이 가능합니다.
 
-
-
-
+<br>
 
 ## How to Transfer Learning
 
 - Multi-Speaker에 대한 Pre-train일 경우 Pre-train 학습 시 자동으로 생성된 speaker_info.json을 준비합니다.
 - speaker_info.json와 생성된 pth.tar 체크포인트를 ckpt에 위치하고 train.py --restore_step으로 학습합니다.
 
-
-
-
+<br>
 
 ## How to Synthesize
 
@@ -104,9 +90,7 @@ FastSpeech2에 HiFi-GAN Vocoder를 결합하여, 한국어 Multi-Speaker TTS로 
   - 임의로 제시한 대본으로 합성 1, 2, 3번 선택
   - 직접 작성한 대본 생성은 4번 선택
 
-
-
-
+<br>
 
 ## Model Pipeline
 
