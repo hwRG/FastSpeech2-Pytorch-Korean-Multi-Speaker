@@ -71,11 +71,11 @@ FastSpeech2에 HiFi-GAN Vocoder를 결합하여, 한국어 Multi-Speaker TTS로 
   # lab 생성, mfa 학습, lab 분리
   python data_preprocessing.py 
   ```
-- 학습 중 평가를 위해 [HiFi-GAN](https://github.com/hwRG/HiFi-GAN-Pytorch)으로 미리 학습한 generator를 vocoder/pretrained_models 디렉토리에 미리 합니다.
+- 학습 중 평가를 위해 [HiFi-GAN](https://github.com/hwRG/HiFi-GAN-Pytorch)으로 학습한 generator를 vocoder/pretrained_models 디렉토리에 저장합니다.
 
-1. 개인 데이터에 KSS의 transcript 형식에 따라 작성하거나, data_preprocessing.py의 json 처리 함수를 참고하여 transcript를 생성
+1. 데이터를 형식에 따라 transcript를 직접 작성하거나, data_preprocessing.py의 함수를 참고하여 transcrip 생성
 2. 생성된 transcript와 데이터의 디렉토리를 dataset에 보관 후 data_preprocessing.py를 실행
-3. MFA 작업이 완료되고 Textgrid가 최상위 디렉토리에 생성된 것을 확인
+3. MFA 작업이 완료되고 Textgrid.zip 파일이 최상위 디렉토리에 생성된 것을 확인
 4. preprocess.py를 수행하고 preprocessed 폴더에 생성된 전처리 데이터 확인
 
 
@@ -89,7 +89,7 @@ FastSpeech2에 HiFi-GAN Vocoder를 결합하여, 한국어 Multi-Speaker TTS로 
   python train.py
   ```
 
-- 재학습을 하게 될 경우 다음 arg를 추가하여 재학습이 가능합니다.
+- 재학습을 하게 될 경우, restore_step을 추가하여 재학습이 가능합니다.
   ```
   python train.py --restore_step [step]
   ```
@@ -100,7 +100,7 @@ FastSpeech2에 HiFi-GAN Vocoder를 결합하여, 한국어 Multi-Speaker TTS로 
 
 1. Multi-Speaker에 대한 Pre-train을 수행할 경우, Pre-train 학습 시 자동으로 생성된 speaker_info.json 저장
 
-2. Fine-Tune을 위한 디렉토리 최상단에 speaker_info.json을 붙여넣고 ckpt/데이터이름 디렉토리에 pth.tar 파일을 이동
+2. 디렉토리 최상단에 speaker_info.json을 넣고 ckpt/데이터이름 디렉토리에 pth.tar 체크포인트 복사
 
 3. Train에서 재학습을 수행하는 것과 동일하게 파이썬 실행
 
