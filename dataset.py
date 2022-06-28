@@ -30,26 +30,27 @@ class Dataset(Dataset):
 
     def __getitem__(self, idx):
         t=self.text[idx]
-        basename=self.basename[idx]
-        # idx는 랜덤으로 선택하는 듯
+        # basename을 data_process처럼 나누어 저장 (Speaker Dir/Speaker wav)
+        basename= self.basename[idx].strip().split('/')
+
         phone = np.array(text_to_sequence(t, []))
         
         mel_path = os.path.join(
-            hparams.preprocessed_path, "mel", basename[:6], "{}-mel-{}.npy".format(hparams.dataset, basename))
+            hparams.preprocessed_path, "mel", basename[0], "{}-mel-{}.npy".format(hparams.dataset, basename[1]))
         mel_target = np.load(mel_path)
         D_path = os.path.join(
-            hparams.preprocessed_path, "alignment", basename[:6], "{}-ali-{}.npy".format(hparams.dataset, basename))
+            hparams.preprocessed_path, "alignment", basename[0], "{}-ali-{}.npy".format(hparams.dataset, basename[1]))
         D = np.load(D_path)
         f0_path = os.path.join(
-            hparams.preprocessed_path, "f0", basename[:6], "{}-f0-{}.npy".format(hparams.dataset, basename))
+            hparams.preprocessed_path, "f0", basename[0], "{}-f0-{}.npy".format(hparams.dataset, basename[1]))
         f0 = np.load(f0_path)
         energy_path = os.path.join(
-            hparams.preprocessed_path, "energy", basename[:6], "{}-energy-{}.npy".format(hparams.dataset, basename))
+            hparams.preprocessed_path, "energy", basename[0], "{}-energy-{}.npy".format(hparams.dataset, basename[1]))
         energy = np.load(energy_path)
         
-        # !! 스피커 아이디로 판단
-        sample = {"id": basename[:6],  
-                  "name": basename,
+        # id는 Speaker ID
+        sample = {"id": basename[0],  
+                  "name": basename[1],
                   "text": phone,
                   "mel_target": mel_target,
                   "D": D,
@@ -70,11 +71,10 @@ class Dataset(Dataset):
         for text, D, name in zip(texts, Ds, names):
             if len(text) != len(D):
                 #print('the dimension of text and duration should be the same')
-                #print('text: ',sequence_to_text(text)) # 왜인지 ascii 오류가 뜬다
-                print(text.shape, D.shape, name)
+                #print('text: ',sequence_to_text(text)) 
+                #print(text.shape, D.shape, name)
                 #print(type(texts))
-                # !!! wav와 메타데이터의 단위가 달라요 문제에요 할 때 False를 return
-                # !!! 여기 걸리는 데이터는 아예 버리는 코드를 추가해야 함
+                ## wav와 메타데이터의 단위가 다를 경우 False return
                 return False
 
 

@@ -29,35 +29,38 @@ def prepare_align(in_dir, meta):
 def build_from_path(in_dir, out_dir, meta):
     train, val = list(), list()
 
+    # processed 데이터에 대한 standard scaler 준비
     scalers = [StandardScaler(copy=False) for _ in range(3)]	# scalers for mel, f0, energy
     n_frames = 0
     
     with open(os.path.join(in_dir, meta), encoding='utf-8') as f:
         for index, line in enumerate(f):
             parts = line.strip().split('|')
-            # !! basename은 100063/10006312229.wav 형식임
+            # basename은 100063/12229.wav 형식
             # basename[0] : 폴더명 / basename[1] : 파일명 
             basename = parts[0].strip().split('/')
+
+            if len(parts) < 5: # transcript 형식 오류 적발
+                print('Bad Trascript Processed')
+                continue
             text = parts[3]
 
-            # Alignment로 Preprocessing checkpoint
+            # Alignment로 Preprocessing check
             preCheck = out_dir + '/mel/' + basename[0] + '/{}-mel-{}.npy'.format(hp.dataset, basename[1][:-4])
             if os.path.isfile(preCheck):
                 continue
-
+            
+            ## preprocessed 데이터 추출 함수 / ret은 파일 위치 및 텍스트 + mel-spectrogram
             ret = process_utterance(in_dir, out_dir, basename, scalers)
             
-            # !!! 시간이 너무 작아 f0가 없는 것과 Textgrid가 없는 등 상황에서 포함시키지 않음
-            # 또한 8초 이상의 데이터는 학습에 방해가 될 수 있기 때문에 제거
-            if float(parts[4]) > 9:
-                print(parts[0], parts[4])
-            if ret is None or ret is False or float(parts[4]) > 8:
+            # f0가 0인 상황과 Textgrid가 누락된 상황에 학습 데이터로 추가하지 않음
+            if ret is None or ret is False:
                 continue
             else:
                 info, n = ret
             
-            # train / val 나누는 과정 9:1로 진행
-            rand = random.randrange(0,10)
+            # train:val 비율 29:1로 진행
+            rand = random.randrange(0,30)
             if rand < 1:
                 val.append(info)
             else:
@@ -69,8 +72,11 @@ def build_from_path(in_dir, out_dir, meta):
 
             n_frames += n
             
+    # 각 데이터마다 마련한 scaler로 param_list 생성
     param_list = [np.array([scaler.mean_, scaler.scale_]) for scaler in scalers]
     param_name_list = ['mel_stat.npy', 'f0_stat.npy', 'energy_stat.npy']
+    
+    # 각 Scaler 값들을 stat들로 두어 학습과 추론 시 활용 
     [np.save(os.path.join(out_dir, param_name), param_list[idx]) for idx, param_name in enumerate(param_name_list)]
 
     return [r for r in train if r is not None], [r for r in val if r is not None]
@@ -81,24 +87,7 @@ def process_utterance(in_dir, out_dir, basename, scalers):
 
     wav_path = os.path.join(in_dir, 'wavs', basename[0], '{}.wav'.format(basename[1]))
     
-    # preprocess.py로 이사했습니다
-    """
-    # !!! 만약 sampling rate가 16000이면 그대로 wavs로 변경되고 아니면
-    # !!! 다른 sampling rate면 16000으로 변경되고 변경된 wav는 wavs 폴더로 저장, lab은 labs에 저장
-    sample_rate, _ = sio.wavfile.read(wav_path)
-    # Convert kss data into PCM encoded wavs
-    if sample_rate != 16000:
-        os.system('mv ' + in_dir + '/wavs ' + in_dir + '/wavs_{}'.format(str(sample_rate)))
-        wav_before_path = os.path.join(in_dir, 'wavs_{}'.format(str(sample_rate)), basename[0], '{}.wav'.format(basename[1]))
-        if not os.path.exists(os.path.join(in_dir, 'wavs')):
-            os.mkdir(os.path.join(in_dir, 'wavs'))
-        if not os.path.exists(os.path.join(in_dir, 'wavs', basename[0])):
-            os.mkdir(os.path.join(in_dir, 'wavs', basename[0]))
-        os.system("ffmpeg -i {} -ac 1 -ar 16000 {}".format(wav_before_path, wav_path))
-    """
-
-    # Textgrid hparam에 의존하도록 변경
-    #tg_path = os.path.join(out_dir, 'TextGrid', '{}.TextGrid'.format(basename)) 
+    # Textgrid 디렉토리 설정 
     tg_path = os.path.join(out_dir, hp.textgrid_name.replace('.zip', ''), basename[0], '{}.TextGrid'.format(basename[1])) 
 
     # TextGrid가 없을 경우
@@ -106,7 +95,7 @@ def process_utterance(in_dir, out_dir, basename, scalers):
         print(basename, 'TextGrid is Not Found.')
         return None
 
-    # Get alignments
+    # Textgrid로부터 alignments 불러오기
     textgrid = tgt.io.read_textgrid(tg_path)
     phone, duration, start, end = get_alignment(textgrid.get_tier_by_name('phones'))
     text = '{'+ '}{'.join(phone) + '}' # '{A}{B}{$}{C}', $ represents silent phones
@@ -116,11 +105,11 @@ def process_utterance(in_dir, out_dir, basename, scalers):
     if start >= end:
         return None
 
-    # Read and trim wav files
+    # Read and trim wav files (묵음 날려버림)
     _, wav = read(wav_path)
     wav = wav[int(hp.sampling_rate*start):int(hp.sampling_rate*end)].astype(np.float32)
 
-    # Compute fundamental frequency
+    # Compute fundamental frequency (pyworld를 사용한 핵심 주파수 추출 - pitch contour)
     f0, _ = pw.dio(wav.astype(np.float64), hp.sampling_rate, frame_period=hp.hop_length/hp.sampling_rate*1000)
     f0 = f0[:sum(duration)]
     
@@ -130,13 +119,12 @@ def process_utterance(in_dir, out_dir, basename, scalers):
     mel_spectrogram = mel_spectrogram.numpy().astype(np.float32)[:, :sum(duration)]
     energy = energy.numpy().astype(np.float32)[:sum(duration)]
 
-    # !! 2초 미만의 오디오가 아예 사라져 버리는 문제가 발생
-    # !!! 시간도 오래걸리고, 짧은 데이터도 소중하기 때문에 주석처리
+    # ! 2초 미만의 오디오가 무시되는 문제 발생하여 주석처리 (없이도 성능 좋음)
     #f0, energy = remove_outlier(f0), remove_outlier(energy)
 
     f0, energy = average_by_duration(f0, duration), average_by_duration(energy, duration)
     
-    # f0[f0!=0]은 요소 안에 0을 뺀 모든 것을 의미
+    # f0[f0!=0]은 f0 안에 0을 뺀 모든 것을 의미 / 즉, 전부다 0이면 에러라는 뜻
     if len(f0[f0!=0]) == 0 :
         print(basename, 'f0 error')
         return None
@@ -144,40 +132,40 @@ def process_utterance(in_dir, out_dir, basename, scalers):
     if mel_spectrogram.shape[1] >= hp.max_seq_len:
         return None
 
-    # !! 사용할 루트를 폴더명에 따라 저장함 
+
+
     # Save alignment
-    
     if not os.path.exists(os.path.join(out_dir, 'alignment', basename[0])):
         os.makedirs(os.path.join(out_dir, 'alignment', basename[0]), exist_ok=True)
     ali_filename = '{}-ali-{}.npy'.format(hp.dataset, basename[1])
     np.save(os.path.join(out_dir, 'alignment', basename[0], ali_filename), duration, allow_pickle=False)
 
-    
+    # Save f0
     if not os.path.exists(os.path.join(out_dir, 'f0', basename[0])):
         os.makedirs(os.path.join(out_dir, 'f0', basename[0]), exist_ok=True)
     # Save fundamental prequency
     f0_filename = '{}-f0-{}.npy'.format(hp.dataset, basename[1])
     np.save(os.path.join(out_dir, 'f0', basename[0], f0_filename), f0, allow_pickle=False)
 
-
+    # Save energy
     if not os.path.exists(os.path.join(out_dir, 'energy', basename[0])):
         os.makedirs(os.path.join(out_dir, 'energy', basename[0]), exist_ok=True)
-    # Save energy
     energy_filename = '{}-energy-{}.npy'.format(hp.dataset, basename[1])
     np.save(os.path.join(out_dir, 'energy', basename[0], energy_filename), energy, allow_pickle=False)
 
-
+    # Save mel
     if not os.path.exists(os.path.join(out_dir, 'mel', basename[0])):
         os.makedirs(os.path.join(out_dir, 'mel', basename[0]), exist_ok=True)
-    # Save spectrogram
+    
+    # Save mel-spectrogram
     mel_filename = '{}-mel-{}.npy'.format(hp.dataset, basename[1])
     np.save(os.path.join(out_dir, 'mel', basename[0], mel_filename), mel_spectrogram.T, allow_pickle=False)
    
-    # 스케일러 (사용하는 건지 잘 모르겠음)
+    # 각 Standard Scaler를 데이터마다 fit 
     mel_scaler, f0_scaler, energy_scaler = scalers
     mel_scaler.partial_fit(mel_spectrogram.T)
     f0_scaler.partial_fit(f0[f0!=0].reshape(-1, 1))
     energy_scaler.partial_fit(energy[energy != 0].reshape(-1, 1))
 
-    # !! 여기 애매한 듯
-    return '|'.join([basename[1], text]), mel_spectrogram.shape[1]
+    # train.txt / val.txt에서 사용할 텍스트 모음
+    return '|'.join([basename[0] + '/' + basename[1], text]), mel_spectrogram.shape[1]

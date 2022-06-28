@@ -1,16 +1,15 @@
 import os
 
-# 데이터셋 이름 정하는 것으로 dataset 안에 폴더 하나만 있어야 함
+# dataset 이름 확인을 위해 dataset 디렉토리 활용 
 if os.path.exists('dataset'):
     dataset = os.listdir('dataset')[0]
-else:
+else: # dataset이 비었을 때 preprocessed 디렉토리 활용
     dataset = os.listdir('preprocessed')[0]
-# 만약 dataset이 비었을 때 preprocessed를 활용
 
 
 # Vocoder
 vocoder = 'hifigan'
-vocoder_pretrained_model_name = dataset + "_g_00260000_15pre.pt"
+vocoder_pretrained_model_name = dataset + "_g_00360000.pt"
 vocoder_pretrained_model_path = os.path.join("./vocoder/pretrained_models/", vocoder_pretrained_model_name)
 
 
@@ -18,23 +17,22 @@ data_path = os.path.join("./dataset/", dataset)
 meta_name = dataset + "_transcript.txt"
 textgrid_name = "textgrids.zip"
 
+
 ### set GPU number ###
 train_visible_devices = "0,1"
 synth_visible_devices = "1"
 
-
 # Text
 text_cleaners = ['korean_cleaners']
 
+
 # Audio and mel
-### kss ###
-# !! aihub 기준 16000이라 수정
+# Default Sampling rate - 16000
 sampling_rate = 16000
 filter_length = 1024
 hop_length = 256
 win_length = 1024
 
-### kss ###
 max_wav_value = 32768.0
 n_mel_channels = 80
 mel_fmin = 0
@@ -93,15 +91,12 @@ upsample_kernel_sizes = [16,16,4,4]
 upsample_initial_channel = 512
 resblock_kernel_sizes = [3,7,11]
 resblock_dilation_sizes = [[1,3,5], [1,3,5], [1,3,5]]
-# 실수로 컴마까지 다 가져와버림
-
 
 # Log-scaled duration
 log_offset = 1.
 
-
 # Save, log and synthesis
-save_step = 10000
+save_step = 1000
 eval_step = 5000
 eval_size = 256
 log_step = 1000

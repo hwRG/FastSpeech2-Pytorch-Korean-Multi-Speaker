@@ -58,11 +58,12 @@ def evaluate(model, step, speaker_table, vocoder=None):
     for i, batchs in enumerate(loader):
         for j, data_of_batch in enumerate(batchs):
             # Get Data
-
+            if type(data_of_batch) == bool:
+                continue
             speaker_ids = []
             for t in data_of_batch["id"]:
-                speaker_ids.append(int(t))
-            speaker_ids = data_of_batch["id"]
+                speaker_ids.append(t)
+            #speaker_ids = data_of_batch["id"]
 
             text = torch.from_numpy(data_of_batch["text"]).long().to(device)
             mel_target = torch.from_numpy(data_of_batch["mel_target"]).float().to(device)
@@ -77,7 +78,7 @@ def evaluate(model, step, speaker_table, vocoder=None):
         
             with torch.no_grad():
                 # Forward
-                # train과 마찬가지로 id를 추가해 주어야 함
+                # train과 마찬가지로 id를 추가하여 Multi-Speaker FastSpeech2
                 mel_output, mel_postnet_output, log_duration_output, f0_output, energy_output, src_mask, mel_mask, out_mel_len = model(
                         text, src_len, speaker_ids, mel_len, D, f0, energy, max_src_len, max_mel_len)
                 
@@ -129,8 +130,10 @@ def evaluate(model, step, speaker_table, vocoder=None):
                         energy_ = utils.de_norm(energy_, mean_energy, std_energy).detach().cpu().numpy()
                         energy_output_ = utils.de_norm(energy_output_, mean_energy, std_energy).detach().cpu().numpy()
  
+                        # plot이 나눠 생성하는 것에 맞춰져 있어 evaluate에서는 사용하지 않음
                         #utils.plot_data([(mel_postnet.numpy(), f0_output_, energy_output_), (mel_target_.numpy(), f0_, energy_)], 
                         #    ['Synthesized Spectrogram', 'Ground-Truth Spectrogram'], filename=os.path.join(hp.eval_path, 'eval_step_{}_{}.png'.format(step, basename)))
+
                         idx += 1
                     print("done")
             current_step += 1            

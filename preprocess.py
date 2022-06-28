@@ -17,6 +17,7 @@ def main():
     meta = hp.meta_name
     textgrid_name = hp.textgrid_name
 
+    # processed 데이터 경로 지정
     mel_out_dir = os.path.join(out_dir, "mel")
     if not os.path.exists(mel_out_dir):
         os.makedirs(mel_out_dir, exist_ok=True)
@@ -32,25 +33,24 @@ def main():
     energy_out_dir = os.path.join(out_dir, "energy")
     if not os.path.exists(energy_out_dir):
         os.makedirs(energy_out_dir, exist_ok=True)
-
-    #if os.path.isfile(textgrid_name):
-    #    os.system('cp ./{} {}'.format(textgrid_name, out_dir))
     
+    # Textgrid.zip 압축 풀기
     if not os.path.exists(os.path.join(out_dir, textgrid_name.replace(".zip", ""))):
         os.system('unzip {} -d {}'.format(textgrid_name, out_dir))
         
+    # wav 데이터로부터 sampling rate 읽기
     speakers = os.listdir(os.path.join(in_dir, 'wavs'))
     sample_data = os.listdir(os.path.join(in_dir, 'wavs', speakers[0]))
+
     for sample_wav in sample_data:
         if sample_wav[-3:] == 'wav':
             temp = sample_wav
-            print(temp, '\n\n\n')
+            print(temp)
             break
     sample_rate, _ = sio.wavfile.read(os.path.join(in_dir, 'wavs', speakers[0], temp))
     
-    
-    # Sampling rate가 다를 경우 원래 파일을 sampling rate 폴더명으로 변경하고 새로 16000인 wav 폴더 생성 
-    if sample_rate != 16000:
+    # Sampling rate가 다를 경우 원래 파일을 sampling rate 폴더명으로 변경하고 새로 16000 wav 폴더 생성 
+    if sample_rate != hp.sampling_rate:
         os.system('mv ' + in_dir + '/wavs ' + in_dir + '/wavs_{}'.format(str(sample_rate)))
 
         for speaker in speakers:
@@ -69,8 +69,10 @@ def main():
                 if not os.path.exists(os.path.join(in_dir, 'wavs', speaker)):
                     os.mkdir(os.path.join(in_dir, 'wavs', speaker))
 
-                os.system("ffmpeg -i {} -ac 1 -ar 16000 {}".format(wav_before_path, wav_path))
+                # ffmpeg로 sampling rate 16000 wav 파일 생성
+                os.system("ffmpeg -i {} -ac 1 -ar {} {}".format(wav_before_path, str(hp.sampling_rate), wav_path))
 
+    # train, val은 리스트로, 파일 위치와 텍스트를 받아 저장
     train, val = data_processing.build_from_path(in_dir, out_dir, meta)
 
     write_metadata(train, val, out_dir)

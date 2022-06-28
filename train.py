@@ -30,21 +30,16 @@ def main(args):
     
     # Get dataset
     dataset = Dataset("train.txt") 
-    # !! 여기서 shuffle이 True여서 인덱스를 랜덤으로 부르는 듯
+    
+    # shuffle=True - 인덱스 랜덤 선별 (batch의 제곱만큼 준비하고 2중 for문)
     loader = DataLoader(dataset, batch_size=hp.batch_size**2, shuffle=True, 
         collate_fn=dataset.collate_fn, drop_last=True, num_workers=0)
 
-    # initial 단계에서 speaker 추가
-    # Define model
-
-    # !! 둘다 tensor 형태로 바꿔주어야 함
-    # 영어가 들어가면 텐서로 바꿀 수 없음....
+    # 학습 시 Multi / Single 판단 (Add)
     _, speaker_table = utils.get_speakers()
     print('\nSpeaker Count', len(speaker_table))
 
-    # !! 글자들을 바꾸기가 어려운지 텐서 변경이 안됨
-    #speaker_table = torch.tensor(speaker_table)
-
+    # FastSpeech2 정의
     model = nn.DataParallel(FastSpeech2()).to(device)
     print("Model Has Been Defined")
     num_param = utils.get_param_num(model)
@@ -79,7 +74,7 @@ def main(args):
     mean_energy, std_energy = mean_energy.reshape(1, -1), std_energy.reshape(1, -1)
 
 
-    # Load vocoder
+    # Load HiFi-GAN or VocGAN
     if hp.vocoder == 'vocgan':
         vocoder = utils.get_vocgan(ckpt_path = hp.vocoder_pretrained_model_path)
         vocoder.to(device)
@@ -88,6 +83,7 @@ def main(args):
         vocoder.to(device)
     else:
         vocoder = None
+
     # Init logger
     log_path = hp.log_path
     if not os.path.exists(log_path):
@@ -106,26 +102,24 @@ def main(args):
         # Get Training Loader
         total_step = hp.epochs * len(loader) * hp.batch_size
 
-        # !! loader을 부를 때 getitems를 수행함
-        # batch size는 설정한 batch의 제곱임
+        # loader를 불러 getitems 함수 수행
         for i, batchs in enumerate(loader):
-            # btachs는 64개 중 8개를 뽑은 것
+            # batch가 8인 경우 64개 중에 8개 선별
             for j, data_of_batch in enumerate(batchs):
-                # !!! 메타데이터가 나쁘게 작성된 데이터에 대한 배치단위로 넘기기로 해결 -> 해결 더 필요
+                # metadata가 잘못 작성된 데이터가 있을 경우 배치 단위 생략
                 if type(data_of_batch) == bool:
                     continue
+
                 start_time = time.perf_counter()
                 current_step = i*hp.batch_size + j + int(re.sub(r'[^0-9]', '', args.restore_step)) + epoch*len(loader)*hp.batch_size + 1
 
-                # 이번 배치의 데이터 텐서로 변환 (speaker_ids 제외)
-
+                # Speaker Embedding을 위한 Embedding ID
                 speaker_ids = []
                 for t in data_of_batch["id"]:
                     speaker_ids.append(t)
                 
-                # speaker embedding을 위해 dict형식으로 0~x까지 value를 설정하자
-                text = torch.from_numpy(data_of_batch["text"]).long().to(device)
 
+                text = torch.from_numpy(data_of_batch["text"]).long().to(device)
                 mel_target = torch.from_numpy(data_of_batch["mel_target"]).float().to(device)
                 D = torch.from_numpy(data_of_batch["D"]).long().to(device)
                 log_D = torch.from_numpy(data_of_batch["log_D"]).float().to(device)
@@ -137,7 +131,7 @@ def main(args):
                 max_mel_len = np.max(data_of_batch["mel_len"]).astype(np.int32)
                 
                 # Forward
-                # !!!! speaker_ids를 추가해 주어야 함 / 잠시 제거 / 다시 추가
+                # Speaker ID를 추가하여 Multi-Speaker FastSpeech2 구현
                 mel_output, mel_postnet_output, log_duration_output, f0_output, energy_output, src_mask, mel_mask, _ = model(
                     text, src_len, speaker_ids, mel_len, D, f0, energy, max_src_len, max_mel_len)
                 
@@ -182,7 +176,6 @@ def main(args):
                 # Print
                 if current_step % hp.log_step == 0:
                     Now = time.perf_counter()
-
 
                     str1 = "Epoch [{}/{}], Step [{}/{}]:".format(
                         epoch+1, hp.epochs, current_step, total_step)

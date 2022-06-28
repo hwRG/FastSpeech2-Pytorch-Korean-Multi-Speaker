@@ -22,25 +22,33 @@ class FastSpeech2(nn.Module):
         self.speaker_embed_dim = speaker_embed_dim
         self.speaker_embed_std = speaker_embed_std
 
-        # 싱글일 경우 임베딩 없이 학습 / 멀티일 경우 임베딩 적용 학습
+        # Single-Speaker 경우 임베딩 없이 학습 / Multi-Speaker 경우 임베딩 적용 학습
         if len(self.speaker_table) == 1:
             self.single = True
-            print('Single Speaker')
+            print('Base: Single Speaker')
         else:
-            self.single = False
-            print('Multi Speaker')
+            # Fine-tune
+            if self.n_speakers == 1:
+                self.single = True
+                print('Base: Multi Speaker / Fine-Tune')
+
+            # Multi-Speaker (or Pre-train)
+            else:
+                self.single = False
+                print('Base: Multi Speaker')
         
-            
-        self.speaker_embeds = Embedding(self.n_speakers, speaker_embed_dim, padding_idx=0, std=speaker_embed_std)
+        # Speaker Embedding layer 정의
+        self.speaker_embeds = Embedding(len(self.speaker_table), speaker_embed_dim, padding_idx=0, std=speaker_embed_std)
 
         self.encoder = Encoder()
 
-        # !! Speaker를 통합하는 레이어
+        # Embedding 결과물과 Encoder 통합
         self.speaker_integrator = SpeakerIntegrator()
 
         self.variance_adaptor = VarianceAdaptor()
 
         self.decoder = Decoder()
+
         self.mel_linear = nn.Linear(hp.decoder_hidden, hp.n_mel_channels)
         
         self.use_postnet = use_postnet
@@ -52,24 +60,38 @@ class FastSpeech2(nn.Module):
         src_mask = get_mask_from_lengths(src_len, max_src_len)
         mel_mask = get_mask_from_lengths(mel_len, max_mel_len) if mel_len is not None else None
 
-        if self.single == True or synthesize == True: # Single Speaker (Fine-tune)
-            # 임베딩 없이 학습 / single synthesize도 임베딩 없이 합성
+        # Single Speaker (Fine-tune)
+        if self.single == True or synthesize == True: 
+            # Single Speaker 또는 합성할 때 Encoder만 사용
             encoder_output = self.encoder(src_seq, src_mask)
-
-        else: # Multi Spekaer (Pre-train)
-            speaker_ids_dict = []
-            #if synthesize == True: # Multi 합성은 현재 합성 결과를 확인하기 위함
-            #    print(list(self.speaker_table.values())[0])
-            #    speaker_ids_dict.append(list(self.speaker_table.values())[0]) # !!!! 지금 너 필요 없어지려고 해
             
+            # Multi-speaker로 임베딩을 지정해 합성할 경우 사용
+            """
+            if self.single == False:
+                speaker_ids_dict = []
+                speaker_ids_dict.append(list(self.speaker_table.values())[3])
+                speaker_ids_dict = torch.tensor(speaker_ids_dict).long().to(device)
+
+                encoder_output = self.encoder(src_seq, src_mask)
+                speaker_embed = self.speaker_embeds(speaker_ids_dict)
+                encoder_output = self.encoder(src_seq, src_mask)
+                encoder_output = self.speaker_integrator(encoder_output, speaker_embed)
+            """
+
+        # Multi Spekaer (Pre-train)
+        else: 
+            speaker_ids_dict = []
+            
+            # Dictionary에서 ID에 따라 임베딩 값 찾아 리스트에 추가 
             for id in speaker_ids:
                 speaker_ids_dict.append(self.speaker_table[id])
             # 지정된 임베딩 값을 텐서로 변환하여 배치에 맞게 돌아가게 함 
             speaker_ids_dict = torch.tensor(speaker_ids_dict).long().to(device)
-            # !! 스피커 임베딩 레이어 추가
+            
+            # Speaker Embedding Layer
             speaker_embed = self.speaker_embeds(speaker_ids_dict)
             encoder_output = self.encoder(src_seq, src_mask)
-            # !! encoder output에 하나로 뭉친 output 추가
+            # Encoder output과 Embedding output 더함
             encoder_output = self.speaker_integrator(encoder_output, speaker_embed)
 
         if d_target is not None:

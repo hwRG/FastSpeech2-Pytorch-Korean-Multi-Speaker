@@ -83,6 +83,7 @@ def json_to_transcripts():
                 utterance_set.append(file[:-4] + 'wav')
                 utterance_set.append(line_replace(json_data['발화정보']['stt']))
                 
+                # unicodedata.normalize로 글자의 위치까지 기록해 나열
                 sep_text = unicodedata.normalize('NFD',line_replace(json_data['발화정보']['stt']))
                 utterance_set.append(sep_text)
                 
@@ -134,17 +135,24 @@ def aligner():
             
             file_dir, script = temp[0], temp[3]
             script = re.sub(re.compile(filters), '', script)
-            script = line_replace(script) # !!! 여기서 핵심 삭제
+
+            # filters로 걸러지지 않는 항목 추가 제거
+            script = line_replace(script) 
             
-            #file_dir = file_dir.split('/') 폴더 별로 나눌 경우
             
             fn = file_dir[:-3] + 'lab'
             file_dir = os.path.join(data_dir, fn)
-            #print(file_dir)
             with open(file_dir, 'w', encoding='utf-8') as f:
                 f.write(script)
 
             file_list.append(os.path.join(file_dir))
+
+    with open(transcript, 'r', encoding='utf-8') as f:
+        for line in f.readlines():
+            temp = line.split('|')
+            
+            file_list.append(os.path.join(data_dir, temp[0][:-3]) + 'lab')
+
 
     jamo_dict = {}
     for file_name in tqdm(file_list):
@@ -161,6 +169,7 @@ def aligner():
             f.write(content)
     print("Aligner Done\n")
 
+
 def mfa_train():
     print("MFA Training Start.. \n")
 
@@ -174,7 +183,7 @@ def mfa_train():
     
     os.system('mv ~/Documents/MFA/wavs_train_acoustic_model/sat_2_ali/textgrids ./')
     os.system('zip -r textgrids.zip textgrids')
-    os.system('mv textgrids.zip ' + first_dir) # 메인 dir로 옮겨
+    os.system('mv textgrids.zip ' + first_dir) # 압축 후 최상위 디렉토리에 zip 파일로 생성
     print("MFA Training Done! \n")
     
 
@@ -192,11 +201,18 @@ def lab_separate():
 if __name__ == '__main__':
     os.chdir('dataset/' + hp.dataset)
 
-    change_name('wavs', 'wav')
+    # 디렉토리와 파일에 숫자 제외 모두 제거, 중복되지 않도록 조정
+    #change_name('wavs', 'wav')
     #change_name('label', 'json')
 
+    # AIHub 데이터 기준 json 데이터를 transcript로 변환
     #json_to_transcripts()
+
+    # 1) mfa를 위해 데이터마다 lab 파일 생성
     aligner()
 
+    # 2) 순차적으로 mfa 수행하여 textgrids 생성 및 압축  
     mfa_train()
+
+    # 3) 디렉토리에 lab 파일 제거
     lab_separate()

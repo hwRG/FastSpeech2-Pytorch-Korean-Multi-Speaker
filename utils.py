@@ -19,24 +19,20 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 import matplotlib.font_manager as fm
 
-# !! Speaker 불러오기
+# Speaker list 불러오기 (Add)
 def get_speakers(synthesize=False):
+    # preprocessed의 alignment로 확인
     path = 'preprocessed/' + hp.dataset + '/alignment'
-    file_list = os.listdir(path)
-    file_list.sort()
-    n_speakers = len(file_list)
+    if not os.path.exists(path):
+        n_speakers = 1
+    else:    
+        file_list = os.listdir(path)
+        file_list.sort()
+        n_speakers = len(file_list)
     speaker_table = {}
     
-    if synthesize:
-        with open('speaker_info.json', 'r') as f:
-            pre_speakers = json.load(f)
-        n_speakers =  pre_speakers['n_speakers']
-        speaker_table = pre_speakers['speaker_table']
-        
-    # Multi-speaker training 하는 경우 테이블 내용 저장
-    elif n_speakers > 1:
-        speakers = {}
-        speakers['n_speakers'] = n_speakers
+    # 학습 시 Multi-speaker training의 경우 테이블 내용 json 저장
+    if n_speakers > 1:
         cnt = 0
         for file in file_list:
             speaker_table[file] = cnt
@@ -48,41 +44,36 @@ def get_speakers(synthesize=False):
         with open('speaker_info.json', 'w') as f:
             json.dump(pre_speakers, f)
 
-    # single-speaker 즉, fine-tuning의 경우   
-    # 참고할 table이 있는지 exist, 있으면 가져오고 없으면 그냥 table은 한개로 설정     
+
+    # 참고할 table이 있는지 확인 / 있으면 읽어오고 없으면 본인만 지정     
     else:
+        # Single-speaker / fine-tuning
         if os.path.exists('speaker_info.json'):
             with open('speaker_info.json', 'r') as f:
                 pre_speakers = json.load(f)
-            # n_speakers 개수만 불러옴 
-            n_speakers = pre_speakers['n_speakers']
-            speaker_table[file_list[0]] = n_speakers
+            speaker_table = pre_speakers['speaker_table']
 
-        else: # 싱글 스피커 학습일 때
+        # Single-speaker / No fine-tuning
+        else:
             speaker_table = {}
             speaker_table[file_list[0]] = 0
 
     return n_speakers, speaker_table
 
 
-# !! Embedding 레이어 추가
+# Speaker Embedding 레이어 함수 (Add)
 def Embedding(num_embeddings, embedding_dim, padding_idx, std=0.01):
-    # !!!! 54개까지 스피커를 두었는데, 실제로 넣는건 이름으로 '100064' 넣어서 문제 생기는 듯
     m = nn.Embedding(num_embeddings, embedding_dim, padding_idx=padding_idx)
-    m.weight.data.normal_(0, std) # weight를 normalize하는 과정
+    m.weight.data.normal_(0, std) # weight normalize 
     return m
 
-# !! 스피커를 하나로 통합하는 모듈 구현 
-class SpeakerIntegrator(nn.Module):
 
+# 스피커를 하나로 통합하는 모듈 (Add)
+class SpeakerIntegrator(nn.Module):
     def __init__(self):
         super(SpeakerIntegrator, self).__init__()
 
     def forward(self, x, spembs):
-        """
-        x      shape : (batch, 39, 256)
-        spembs shape : (batch, 256)
-        """
         spembs = spembs.unsqueeze(1)
         spembs = spembs.repeat(1, x.shape[1], 1)
         x = x + spembs
@@ -121,6 +112,7 @@ def get_alignment(tier):
     
     return phones, np.array(durations), start_time, end_time
 
+
 def process_meta(meta_path):
     with open(meta_path, "r", encoding="utf-8") as f:
         text = []
@@ -131,9 +123,11 @@ def process_meta(meta_path):
             text.append(t)
         return name, text
 
+
 def get_param_num(model):
     num_param = sum(param.numel() for param in model.parameters())
     return num_param
+
 
 def plot_data(data, sentence_list, titles=None, filename=None):
     fonts = 'data/NanumGothic.ttf'
@@ -182,6 +176,7 @@ def plot_data(data, sentence_list, titles=None, filename=None):
     plt.savefig(filename, dpi=200)
     plt.close()
 
+
 def get_mask_from_lengths(lengths, max_len=None):
     batch_size = lengths.shape[0]
     if max_len is None:
@@ -191,6 +186,7 @@ def get_mask_from_lengths(lengths, max_len=None):
     mask = (ids >= lengths.unsqueeze(1).expand(-1, max_len))
 
     return mask
+
 
 def get_vocgan(ckpt_path, n_mel_channels=hp.n_mel_channels, generator_ratio = [4, 4, 2, 2, 2, 2], n_residual_layers=4, mult=256, out_channels=1): 
 
@@ -212,6 +208,7 @@ def load_checkpoint(filepath, device):
     print("Complete.")
     return checkpoint_dict
 
+# HiFi-GAN 불러오기 (Add)
 def get_hifigan(ckpt_path): 
     state_dict_g = load_checkpoint(ckpt_path, device)
     model = Generator().to(device)
@@ -221,6 +218,7 @@ def get_hifigan(ckpt_path):
     return model
 
 
+# 문장 단위로 잘라 합성 (Add)
 def combine_wav(path, cnt):
     for i in range(cnt):
         curPath = path[:-4] + '_' + str(i+1) + path[-4:]
@@ -234,8 +232,8 @@ def combine_wav(path, cnt):
     print(path, 'done')
 
 
+# Synthesize 과정에서 HiFi-GAN을 통한 Mel to Waveform (Add)  
 def hifigan_infer(mel_list, path, synthesize=False):
-
     if torch.cuda.is_available():
         torch.cuda.manual_seed(1234)
         device = torch.device('cuda')
@@ -345,7 +343,7 @@ def _is_outlier(x, p25, p75):
 
     return np.logical_or(x <= lower, x >= upper)
 
-# old_man f0를 싹다 outlier로 판단해버림
+# 길이가 짧은 경우 outlier로 판단하여 사용 X
 def remove_outlier(x):
     """Remove outlier from x."""
     p25 = np.percentile(x, 25)
@@ -376,8 +374,7 @@ def average_by_duration(x, durs):
     return x_char.astype(np.float32)
 
 
-## HiFi-GAN use fuction
-
+## Only HiFi-GAN fuction
 def init_weights(m, mean=0.0, std=0.01):
     classname = m.__class__.__name__
     if classname.find("Conv") != -1:

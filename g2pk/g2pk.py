@@ -112,9 +112,10 @@ class G2p(object):
             inp = func(inp, descriptive, verbose)
         inp = re.sub("/[PJEB]", "", inp)
         
-        """
+        # 발음 기호로 변환하는 과정을 생략 → 숫자와 영어만 변환
+
         # 7. regular table: batchim + onset
-        for str1, str2, rule_ids in self.table:
+        """for str1, str2, rule_ids in self.table:
             _inp = inp
             inp = re.sub(str1, str2, inp)
 
@@ -125,8 +126,7 @@ class G2p(object):
             gloss(verbose, inp, _inp, rule)
         # 8 link
         for func in (link1, link2, link3, link4):
-            inp = func(inp, descriptive, verbose)
-        """
+            inp = func(inp, descriptive, verbose)"""
 
         # 9. postprocessing
         if group_vowels:
